@@ -1,0 +1,18 @@
+# Windows batch files MUST keep CRLF line endings. Checked out with LF they
+# fail silently -- the window opens and closes without any error message.
+# This is the single most expensive mistake in this project's history.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Everything else: normalise to LF in the repository, native on checkout.
+*.js   text
+*.json text
+*.html text
+*.md   text
+*.css  text
+
+# Binary -- never touch these.
+*.ttf  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
