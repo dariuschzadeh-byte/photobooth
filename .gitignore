@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------
+# Never commit anything in this section.
+#
+# The voucher codes are the booth's money: anyone who can read codes.json
+# or a codes CSV can take free photo strips. Guest photos are personal
+# data and belong on the booth PC only.
+# ---------------------------------------------------------------------
+data/codes.json
+data/codes.json.*
+data/codes-*.csv
+data/redemptions.log
+data/server.log
+_attic/
+
+# guest photos and finished strips (hundreds of MB, personal data)
+output/
+!output/.gitkeep
+
+# ---------------------------------------------------------------------
+# Local clutter
+# ---------------------------------------------------------------------
+node_modules/
+.kiosk-profile/
+*.log
+*.tmp
+Thumbs.db
+desktop.ini
+.DS_Store
+.env
+.env.*

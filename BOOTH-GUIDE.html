@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>fr-anz photobooth — daily guide</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+         color: #2b2420; background: #faf3e9; margin: 0; padding: 28px 34px; line-height: 1.5; }
+  h1 { color: #b9797d; font-size: 30px; margin: 0 0 2px; font-weight: 700; }
+  .sub { color: #9a8f83; font-size: 14px; margin-bottom: 22px; }
+  h2 { color: #965a5d; font-size: 19px; margin: 26px 0 10px; border-bottom: 2px solid #e7dac6; padding-bottom: 5px; }
+  ol, ul { margin: 0 0 0 20px; padding: 0; }
+  li { margin-bottom: 9px; }
+  .box { background: #fff; border-radius: 10px; padding: 16px 20px; margin: 12px 0;
+         box-shadow: 0 2px 6px rgba(0,0,0,.05); }
+  .big { font-size: 17px; font-weight: 600; color: #965a5d; }
+  .code { font-family: Consolas, monospace; background: #f3e9e0; padding: 2px 7px;
+          border-radius: 5px; font-size: 15px; font-weight: 700; color: #8c4f49; }
+  .warn { border-left: 5px solid #c5796a; background: #fff5f2; }
+  .ok   { border-left: 5px solid #7fa87f; background: #f4faf4; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  td, th { border: 1px solid #e7dac6; padding: 8px 11px; text-align: left; font-size: 14px; }
+  th { background: #f3e9e0; color: #965a5d; }
+  .step { display: inline-block; background: #b9797d; color: #fff; width: 25px; height: 25px;
+          border-radius: 50%; text-align: center; line-height: 25px; font-weight: 700; margin-right: 7px; }
+  .footer { margin-top: 26px; font-size: 12px; color: #9a8f83; border-top: 1px solid #e7dac6; padding-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>fr-anz photobooth</h1>
+<div class="sub">Daily guide &mdash; please keep this next to the booth</div>
+
+<h2>Every morning — opening</h2>
+<div class="box">
+  <ol>
+    <li><b>Switch on the camera.</b> Make sure the power adapter is plugged in (not a battery).</li>
+    <li><b>Switch on the flash.</b></li>
+    <li><b>Switch on the printer</b> and check there is enough paper and ribbon.</li>
+    <li><b>Switch on the booth PC.</b> The photobooth starts <b>by itself</b> — just wait about one minute.</li>
+  </ol>
+</div>
+
+<div class="box ok">
+  <div class="big">How do I know it is ready?</div>
+  The screen shows <b>"enter your code"</b> with the number keypad. That's it — the booth is open.
+</div>
+
+<div class="box">
+  <div class="big">If the screen does NOT show the keypad</div>
+  Double-click the icon <span class="code">1 - START PHOTOBOOTH</span> on the desktop and wait one minute.
+</div>
+
+<h2>Test it before the first guest</h2>
+<div class="box">
+  <p><span class="step">1</span> Type the staff code <span class="code">731790</span> on the booth screen.</p>
+  <p><span class="step">2</span> Let it take the 3 photos and print one strip.</p>
+  <p><span class="step">3</span> If a strip comes out and looks good — the booth is ready for guests.</p>
+  <p style="margin-bottom:0"><b>The staff code never runs out.</b> Use it as often as you like. It does not use up a guest voucher.</p>
+</div>
+
+<h2>During the day</h2>
+<table>
+  <tr><th>What the guest sees</th><th>What it means / what to do</th></tr>
+  <tr><td>"this code's already been used"</td><td>The card was already used. Give the guest a new card.</td></tr>
+  <tr><td>"that code didn't work"</td><td>Wrong number typed. Ask them to try again slowly.</td></tr>
+  <tr><td>"oops — something went wrong"</td><td>Camera or printer problem. <b>The guest's code still works</b> — they can try again. Check: camera on? printer on? paper left? Then let them retype the same code.</td></tr>
+  <tr><td>Photos are taken, but <b>nothing comes out of the printer</b></td><td>The printer software may have been closed. Double-click <span class="code">1 - START PHOTOBOOTH</span> — it starts the printer software again. Also check: printer switched on? paper and ribbon left?</td></tr>
+  <tr><td>Nothing happens / black screen</td><td>Double-click <span class="code">1 - START PHOTOBOOTH</span> on the desktop.</td></tr>
+</table>
+
+<div class="box warn" style="margin-top:14px">
+  <div class="big">Never close the small window called "fr-anz server"</div>
+  It usually sits minimized in the taskbar. If it is closed, the booth stops working.
+  If you closed it by accident: double-click <span class="code">1 - START PHOTOBOOTH</span>.
+</div>
+
+<h2>Evening — closing</h2>
+<div class="box">
+  <ol>
+    <li>Press <b>Alt + F4</b> to leave the guest screen (or double-click <span class="code">2 - STOP PHOTOBOOTH</span>).</li>
+    <li>Switch off camera, flash and printer.</li>
+    <li>Shut down the PC.</li>
+  </ol>
+</div>
+
+<h2>How many vouchers are left?</h2>
+<div class="box">
+  Open the browser on the booth PC and go to:
+  <div class="code" style="display:inline-block;margin-top:6px">localhost:3000/admin</div>
+  <p style="margin:9px 0 0">There you can see how many codes are used and how many are left.
+  There is also a <b>"print test strip"</b> button — it prints a test photo strip without using the camera
+  and without using up a voucher. Use it to check the printer.</p>
+</div>
+
+<div class="box warn">
+  <div class="big">White lines on the printed strips?</div>
+  That is the printer, not the software. Tell Dariusch — it usually means the ribbon
+  needs to be re-seated or the print head needs cleaning.
+</div>
+
+<div class="footer">
+  Questions or something broken that this page does not cover? Message Dariusch.<br>
+  Staff code: <b>731790</b> &nbsp;·&nbsp; Admin page: <b>localhost:3000/admin</b>
+</div>
+
+</body>
+</html>

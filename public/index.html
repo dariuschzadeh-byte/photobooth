@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>fr-anz · photobooth flow</title>
+<style>
+@font-face{ font-family:'DM Sans'; src:url('/fonts/DMSans.ttf') format('truetype'); font-weight:100 900; font-style:normal; font-display:swap; }
+</style>
+<style>
+/* =================================================================
+   FRANZ PHOTOBOOTH — SCREEN FLOW PROTOTYPE
+   Display: 7" capacitive touch · 1024 x 600 · landscape
+   Brand: fr-anz (with benefits) — cream + dusty rose, DM Sans, lowercase
+   Built big, high-contrast & premium (viewer stands ~1m from a 7" screen).
+   ================================================================= */
+
+/* Tuned for the small 7" panel in the booth, which is viewed from above at
+   a steep angle. Cheap panels wash out badly off-axis, so the ink is much
+   darker than the brand tone and the keys carry visible edges + shadow.
+   Measured contrast: digits 10.8:1 (was 6.0:1), label 8.5:1 (was 5.6:1). */
+:root{
+  --cream:        #EDE2CF;   /* darker ground so the keys stand out */
+  --cream-face:   #FFFDF9;   /* key face, near white */
+  --cream-face-2: #EFE4D2;
+  --cream-line:   #B09B7C;   /* key edge — was almost invisible at 1.3:1 */
+  --rose:         #A05852;   /* brand rose, darkened for legibility */
+  --rose-soft:    #A8756D;
+  --rose-ink:     #5E2F2B;   /* UI text & numbers — the critical one */
+  --clay:         #A33B2D;   /* error tone, still readable off-axis */
+  --ink-dark:     #1d1815;   /* camera viewfinder base */
+  --ink-dark-2:   #2b2420;
+  --warm-white:   #F7F1E5;   /* text on dark */
+  --stage:        #E8E1D2;
+  --bezel-a:      #CB938C;   /* dusty rose frame */
+  --bezel-b:      #B97D76;
+}
+
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; }
+body{
+  font-family:'DM Sans', system-ui, -apple-system, sans-serif;
+  background:var(--stage); color:var(--rose); overflow:hidden;
+  -webkit-font-smoothing:antialiased; -webkit-touch-callout:none;
+  user-select:none; -webkit-user-select:none;
+}
+
+/* ---------- stage + dusty-rose device frame ---------- */
+.stage{ position:fixed; inset:0; overflow:hidden; }
+.bezel{
+  position:absolute; top:48%; left:50%;
+  transform-origin:center center; transform:translate(-50%,-50%) scale(1);
+  padding:16px; background:linear-gradient(155deg,var(--bezel-a),var(--bezel-b));
+  border-radius:30px;
+  box-shadow:0 34px 80px rgba(150,108,98,.38), inset 0 1px 0 rgba(255,255,255,.22), inset 0 -2px 6px rgba(120,80,72,.25);
+}
+.bezel::after{ content:""; position:absolute; top:7px; left:50%; transform:translateX(-50%); width:7px; height:7px; border-radius:50%; background:rgba(120,78,72,.55); }
+.screen-area{ position:relative; width:1024px; height:600px; background:var(--cream); border-radius:14px; overflow:hidden; isolation:isolate; }
+
+/* ---------- screens — soft crossfade ---------- */
+.screen{ position:absolute; inset:0; opacity:0; visibility:hidden; transition:opacity .55s ease, visibility 0s linear .55s; }
+.screen.active{ opacity:1; visibility:visible; transition:opacity .55s ease, visibility 0s linear 0s; }
+
+/* ---------- ambient premium glow on cream screens ---------- */
+#screen-entry::before, #screen-thanks::before, #screen-print::before, #screen-error::before{
+  content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(42% 52% at 22% 28%, rgba(190,134,127,.12), transparent 70%),
+    radial-gradient(46% 56% at 82% 78%, rgba(214,171,165,.12), transparent 72%);
+  animation:ambient 22s ease-in-out infinite alternate;
+}
+@keyframes ambient{ 0%{ transform:translate(-2%,-1%) scale(1); opacity:.65; } 100%{ transform:translate(2%,2%) scale(1.12); opacity:1; } }
+
+/* ---------- logo lockup (fr-anz centered over with benefits) ---------- */
+.logo{ line-height:1; color:var(--rose); text-align:center; }
+.logo .main{ font-size:1em; font-weight:400; letter-spacing:.01em; }
+.logo .sub{ font-size:.30em; font-weight:400; letter-spacing:.52em; margin-top:.55em; padding-left:.52em; opacity:.92; }
+.logo .ipa{ font-size:.20em; font-weight:400; letter-spacing:.22em; margin-top:.7em; opacity:.65; }
+
+/* =================================================================
+   SCREEN 1 — CODE ENTRY
+   ================================================================= */
+#screen-entry{ display:flex; flex-direction:column; }
+.entry-top{
+  height:166px; flex:0 0 166px; position:relative;
+  display:flex; align-items:center; justify-content:center; border-bottom:1px solid var(--cream-line);
+}
+/* bigger logo, centered inside the top-left area */
+.entry-top .logo{
+  position:absolute; left:8px; top:0; bottom:0; width:300px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-size:50px; z-index:2;
+}
+.entry-top .logo .ipa{ display:none; }
+
+.entry-prompt{ text-align:center; position:relative; z-index:1; }
+.entry-prompt .label{ font-size:21px; font-weight:700; letter-spacing:.16em; color:var(--rose-ink); opacity:1; margin-bottom:14px; }
+.slots{ display:flex; gap:14px; justify-content:center; }
+.slot{
+  width:58px; height:70px; border-radius:14px; background:var(--cream-face); border:2.5px solid var(--rose-soft);
+  display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; color:var(--rose-ink);
+}
+.slot .dot{ width:10px; height:10px; border-radius:50%; background:var(--rose-soft); opacity:.9; }
+.slot.next{ border-color:var(--rose-ink); box-shadow:0 0 0 3px rgba(94,47,43,.16); }
+.slot .digit{ display:inline-block; animation:slot-pop .32s cubic-bezier(.2,.7,.3,1); }
+
+.slots.error .slot{ border-color:var(--clay); color:var(--clay); }
+.slots.error{ animation:shake .42s cubic-bezier(.36,.07,.19,.97); }
+
+.entry-msg{ position:absolute; top:100%; left:0; right:0; margin-top:14px; text-align:center; font-size:17px; font-weight:700; color:var(--clay); opacity:0; transition:opacity .25s ease; }
+.entry-msg.show{ opacity:1; }
+
+.keypad{ flex:1 1 auto; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(4,1fr); gap:14px; padding:18px 28px 24px; position:relative; z-index:1; }
+.key{
+  position:relative; overflow:hidden; border:2px solid var(--cream-line); cursor:pointer; border-radius:20px;
+  background:linear-gradient(180deg,var(--cream-face),var(--cream-face-2)); color:var(--rose-ink);
+  font-family:inherit; font-size:56px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 0 var(--cream-line), 0 7px 18px rgba(120,95,70,.22);
+  transition:transform .08s ease, box-shadow .08s ease, background .12s ease;
+  touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+}
+.key:active, .key.press{ transform:translateY(4px); background:linear-gradient(180deg,var(--cream-face-2),#DED0B6); box-shadow:0 0 0 var(--cream-line), 0 2px 8px rgba(120,95,70,.18); }
+.key.ghost{ background:transparent; border:none; box-shadow:none; cursor:default; }
+.key.del{ font-size:0; }
+.key.del svg{ width:52px; height:52px; }
+.key span.ink{ position:absolute; border-radius:50%; background:rgba(140,79,73,.16); transform:translate(-50%,-50%) scale(0); pointer-events:none; animation:ripple .55s ease-out forwards; }
+
+/* premium float-in when the entry screen appears */
+#screen-entry.active .entry-top{ animation:floatIn .6s cubic-bezier(.2,.8,.25,1) both; }
+#screen-entry.active .keypad{ animation:floatIn .6s cubic-bezier(.2,.8,.25,1) .07s both; }
+
+/* =================================================================
+   SCREEN 2 — CAPTURE
+   ================================================================= */
+#screen-capture{ background:radial-gradient(120% 100% at 50% 35%,var(--ink-dark-2),var(--ink-dark)); }
+.viewfinder{ position:absolute; inset:0; overflow:hidden; background:radial-gradient(80% 60% at 50% 40%, rgba(200,170,150,.10), transparent 70%), radial-gradient(120% 120% at 50% 50%, transparent 55%, rgba(0,0,0,.45)); }
+.viewfinder .shimmer{ position:absolute; inset:-40%; background:radial-gradient(closest-side, rgba(255,240,225,.06), transparent); animation:drift 7s ease-in-out infinite alternate; }
+/* logo identical in size + position to the code-entry screen */
+.cap-logo{ position:absolute; left:8px; top:0; height:166px; width:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:50px; color:var(--warm-white); z-index:3; }
+.cap-logo .sub{ opacity:.72; }
+.cap-logo .ipa{ display:none; }
+.cap-progress{ position:absolute; right:44px; top:0; height:166px; display:flex; align-items:center; gap:14px; color:var(--warm-white); z-index:3; }
+.cap-progress .count{ font-size:24px; font-weight:600; letter-spacing:.08em; opacity:.92; }
+.pdots{ display:flex; gap:9px; }
+.pdot{ width:16px; height:16px; border-radius:5px; border:2px solid rgba(247,241,229,.55); transition:.3s ease; }
+.pdot.on{ background:var(--rose); border-color:var(--rose); box-shadow:0 0 10px rgba(190,134,127,.6); }
+
+.countdown{ position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; }
+.cd-ring{ position:absolute; transform:rotate(-90deg); }
+.cd-ring circle{ fill:none; stroke-linecap:round; }
+.cd-ring .track{ stroke:rgba(247,241,229,.16); }
+.cd-ring .bar{ stroke:var(--rose); filter:drop-shadow(0 0 9px rgba(190,134,127,.55)); }
+.cd-number{ font-size:215px; font-weight:600; color:var(--warm-white); line-height:1; text-shadow:0 6px 44px rgba(0,0,0,.4); }
+.cd-number.pop{ animation:cd-pop .9s cubic-bezier(.16,1,.3,1); }
+
+.cap-cue{ position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; opacity:0; }
+.cap-cue .txt{ width:185px; text-align:center; font-size:40px; font-weight:500; line-height:1.12; color:var(--warm-white); }
+.cap-cue.show{ animation:cue 1.1s ease; }
+
+/* shown from the end of the countdown until the photo has transferred --
+   without it the screen sits empty for 2-4s and guests assume it is over */
+.cap-hold{ position:absolute; inset:0; z-index:4; display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .2s ease; pointer-events:none; }
+.cap-hold.show{ opacity:1; }
+.cap-hold .txt{ text-align:center; color:var(--warm-white); font-size:76px; font-weight:600; line-height:1.1;
+  text-shadow:0 6px 40px rgba(0,0,0,.55); }
+.cap-hold .sub{ display:block; font-size:26px; font-weight:400; margin-top:18px; opacity:.8; letter-spacing:.04em; }
+
+.flash{ position:absolute; inset:0; z-index:5; background:#fff; opacity:0; pointer-events:none; }
+.flash.go{ animation:flash .28s ease-out; }
+
+/* =================================================================
+   SCREEN 3 — THANK YOU
+   ================================================================= */
+#screen-thanks{ background:var(--cream); display:flex; align-items:center; justify-content:center; }
+.hearts{ position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+.hearts span{ position:absolute; bottom:-8%; color:var(--rose-soft); opacity:0; animation:floatUp linear infinite; }
+.thanks-inner{ position:relative; z-index:1; text-align:center; }
+.thanks-inner .logo{ font-size:68px; margin-bottom:30px; opacity:0; animation:rise .7s ease .05s forwards; }
+.thanks-line{ font-size:58px; font-weight:500; color:var(--rose); opacity:0; animation:rise .7s ease .22s forwards; }
+
+/* =================================================================
+   SCREEN 4 — PRINTING (final screen)
+   ================================================================= */
+#screen-print{ background:var(--cream); }
+.print-wrap{ position:absolute; inset:0; z-index:1; display:flex; align-items:center; justify-content:center; gap:48px; }
+.strip{
+  position:relative; overflow:hidden; width:226px; background:#fff; border-radius:9px; padding:13px 13px 15px;
+  box-shadow:0 26px 55px rgba(150,120,100,.28); transform:translateY(150%) rotate(-3deg);
+  transition:transform 1.1s cubic-bezier(.2,.9,.25,1); display:flex; flex-direction:column; gap:10px;
+}
+.strip.in{ transform:translateY(0) rotate(0); }
+.strip.in::after{
+  content:""; position:absolute; inset:0; pointer-events:none; z-index:3;
+  background:linear-gradient(115deg, transparent 38%, rgba(255,255,255,.38) 50%, transparent 62%);
+  transform:translateX(-130%); animation:shine 4s ease-in-out 1.3s infinite;
+}
+.strip .cell{ height:132px; border-radius:6px; background:radial-gradient(120% 120% at 50% 40%,var(--ink-dark-2),var(--ink-dark)); position:relative; opacity:.25; filter:saturate(.6); transition:opacity .5s ease, filter .5s ease; }
+.strip .cell::before,.strip .cell::after{ content:""; position:absolute; width:20px; height:20px; border:2px solid rgba(214,171,165,.5); }
+.strip .cell::before{ top:9px; left:9px; border-right:none; border-bottom:none; }
+.strip .cell::after{ bottom:9px; right:9px; border-left:none; border-top:none; }
+.strip .cell.dev{ opacity:1; filter:saturate(1); }
+.strip .foot{ text-align:center; padding-top:6px; }
+.strip .foot .logo{ font-size:27px; }
+.strip .foot .handle{ font-size:10px; letter-spacing:.10em; color:var(--rose-soft); margin-top:8px; }
+
+.print-status{ width:600px; }
+.print-head{ font-size:54px; line-height:1.05; font-weight:600; color:var(--rose-ink); letter-spacing:.01em; }
+.print-sub{ margin-top:16px; font-size:27px; font-weight:400; color:var(--rose); letter-spacing:.02em; line-height:1.4; }
+.print-sub .ig{ color:var(--rose-ink); font-weight:600; text-decoration:none; }
+.print-bar{ height:8px; border-radius:8px; background:var(--cream-line); overflow:hidden; margin-top:28px; width:360px; }
+.print-bar i{ display:block; height:100%; width:0; background:linear-gradient(90deg,var(--rose-soft),var(--rose)); border-radius:7px; box-shadow:0 0 10px rgba(190,134,127,.45); }
+.tap-hint{ margin-top:16px; font-size:15px; color:var(--rose-soft); letter-spacing:.06em; opacity:0; transition:opacity .5s ease; }
+.tap-hint.show{ opacity:1; }
+
+/* =================================================================
+   SCREEN 5 — ERROR (camera/printer failed, code was given back)
+   ================================================================= */
+#screen-error{ background:var(--cream); display:flex; align-items:center; justify-content:center; }
+.error-inner{ position:relative; z-index:1; text-align:center; padding:0 80px; }
+.error-inner .logo{ font-size:54px; margin-bottom:28px; opacity:0; animation:rise .7s ease .05s forwards; }
+.error-head{ font-size:46px; font-weight:600; color:var(--clay); opacity:0; animation:rise .7s ease .18s forwards; }
+.error-sub{ margin-top:16px; font-size:25px; font-weight:400; color:var(--rose-ink); line-height:1.45; opacity:0; animation:rise .7s ease .32s forwards; }
+
+/* ---------------------------- keyframes ---------------------------- */
+@keyframes slot-pop{ from{ transform:translateY(5px) scale(.9); opacity:0; } to{ transform:none; opacity:1; } }
+@keyframes shake{ 10%,90%{transform:translateX(-2px);} 20%,80%{transform:translateX(4px);} 30%,50%,70%{transform:translateX(-9px);} 40%,60%{transform:translateX(9px);} }
+@keyframes ripple{ to{ transform:translate(-50%,-50%) scale(1); opacity:0; } }
+@keyframes floatIn{ from{ transform:translateY(16px); } to{ transform:translateY(0); } }
+@keyframes cd-pop{ 0%{ transform:scale(1.22); opacity:0; filter:blur(9px); } 32%{ opacity:1; filter:blur(0); } 100%{ transform:scale(1); opacity:1; filter:blur(0); } }
+@keyframes cue{ 0%{ opacity:0; transform:translateY(16px); filter:blur(7px); } 25%,75%{ opacity:1; transform:none; filter:blur(0); } 100%{ opacity:0; transform:translateY(-12px); filter:blur(7px); } }
+@keyframes flash{ 0%{ opacity:0; } 12%{ opacity:.95; } 100%{ opacity:0; } }
+@keyframes rise{ 0%{ opacity:0; transform:translateY(18px); } 100%{ opacity:1; transform:none; } }
+@keyframes drift{ 0%{ transform:translate(-6%,-3%) scale(1); } 100%{ transform:translate(6%,4%) scale(1.08); } }
+@keyframes floatUp{ 0%{ transform:translateY(0) scale(.7) rotate(-8deg); opacity:0; } 14%{ opacity:.55; } 80%{ opacity:.32; } 100%{ transform:translateY(-460px) scale(1.05) rotate(8deg); opacity:0; } }
+@keyframes shine{ 0%{ transform:translateX(-130%); } 55%,100%{ transform:translateX(130%); } }
+
+@media (prefers-reduced-motion: reduce){ *{ animation-duration:.001ms !important; transition-duration:.12s !important; } }
+
+</style>
+<style>
+/* kiosk: fill the 1024x600 panel edge-to-edge, no bezel/caption */
+.bezel{ top:50%; padding:0; background:none; box-shadow:none; border-radius:0; }
+.bezel::after{ display:none; }
+.screen-area{ border-radius:0; }
+html,body{ background:#15110f; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="bezel" id="bezel">
+    <div class="screen-area">
+
+      <!-- ============ SCREEN 1 · CODE ENTRY ============ -->
+      <section class="screen active" id="screen-entry">
+        <div class="entry-top">
+          <div class="logo"><div class="main">fr-anz</div><div class="sub">with benefits</div></div>
+          <div class="entry-prompt">
+            <div class="label">enter your code</div>
+            <div class="slots" id="slots"></div>
+            <div class="entry-msg" id="entryMsg">that code didn't work — check your card</div>
+          </div>
+        </div>
+        <div class="keypad" id="keypad">
+          <button class="key" data-d="1">1</button>
+          <button class="key" data-d="2">2</button>
+          <button class="key" data-d="3">3</button>
+          <button class="key" data-d="4">4</button>
+          <button class="key" data-d="5">5</button>
+          <button class="key" data-d="6">6</button>
+          <button class="key" data-d="7">7</button>
+          <button class="key" data-d="8">8</button>
+          <button class="key" data-d="9">9</button>
+          <button class="key ghost" disabled></button>
+          <button class="key" data-d="0">0</button>
+          <button class="key del" data-del aria-label="delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 5H20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9L3 12 9 5Z"/><path d="M16 9l-4 6M12 9l4 6"/>
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- ============ SCREEN 2 · CAPTURE ============ -->
+      <section class="screen" id="screen-capture">
+        <div class="viewfinder"><div class="shimmer"></div></div>
+        <div class="logo cap-logo"><div class="main">fr-anz</div><div class="sub">with benefits</div></div>
+        <div class="cap-progress">
+          <span class="count" id="progCount">1 / 3</span>
+          <span class="pdots" id="pdots"></span>
+        </div>
+        <div class="cap-cue" id="capCue"></div>
+        <div class="countdown" id="countdown">
+          <svg class="cd-ring" width="320" height="320" viewBox="0 0 320 320">
+            <circle class="track" cx="160" cy="160" r="138" stroke-width="12"></circle>
+            <circle class="bar"   cx="160" cy="160" r="138" stroke-width="12" id="cdBar"></circle>
+          </svg>
+          <div class="cd-number" id="cdNumber"></div>
+        </div>
+        <div class="cap-hold" id="capHold">
+          <div class="txt">hold still &#9825;<span class="sub">saving your photo</span></div>
+        </div>
+        <div class="flash" id="flash"></div>
+      </section>
+
+      <!-- ============ SCREEN 3 · THANK YOU ============ -->
+      <section class="screen" id="screen-thanks">
+        <div class="hearts" aria-hidden="true">
+          <span style="left:14%; font-size:26px; animation-duration:6.5s; animation-delay:0s">&#9825;</span>
+          <span style="left:30%; font-size:34px; animation-duration:8s;   animation-delay:1.6s">&#9825;</span>
+          <span style="left:48%; font-size:22px; animation-duration:7s;   animation-delay:3.1s">&#9825;</span>
+          <span style="left:63%; font-size:30px; animation-duration:8.6s; animation-delay:0.8s">&#9825;</span>
+          <span style="left:78%; font-size:24px; animation-duration:7.4s; animation-delay:2.4s">&#9825;</span>
+          <span style="left:88%; font-size:32px; animation-duration:9s;   animation-delay:4s">&#9825;</span>
+        </div>
+        <div class="thanks-inner">
+          <div class="logo"><div class="main">fr-anz</div><div class="sub">with benefits</div></div>
+          <div class="thanks-line">thanks for being here &#9825;</div>
+        </div>
+      </section>
+
+      <!-- ============ SCREEN 4 · PRINTING (final) ============ -->
+      <section class="screen" id="screen-print">
+        <div class="print-wrap">
+          <div class="strip" id="strip">
+            <div class="cell" data-cell></div>
+            <div class="cell" data-cell></div>
+            <div class="cell" data-cell></div>
+            <div class="foot">
+              <div class="logo"><div class="main">fr-anz</div><div class="sub">with benefits</div></div>
+              <div class="handle">@fr.anz_bali</div>
+            </div>
+          </div>
+          <div class="print-status">
+            <div class="print-head">printing your strip &#9825;</div>
+            <div class="print-sub">grab it below &amp; say hi <a class="ig" href="https://www.instagram.com/fr.anz_bali/" target="_blank" rel="noopener">@fr.anz_bali</a></div>
+            <div class="print-bar"><i id="printBar"></i></div>
+            <div class="tap-hint" id="tapHint">tap anywhere to start over</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCREEN 5 · ERROR ============ -->
+      <section class="screen" id="screen-error">
+        <div class="error-inner">
+          <div class="logo"><div class="main">fr-anz</div><div class="sub">with benefits</div></div>
+          <div class="error-head">oops — something went wrong</div>
+          <div class="error-sub">your code is still valid — please try again<br>or grab someone from the team &#9825;</div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* =================================================================
+   FLOW: enter 6-digit code  ->  (auto, NO confirm button)
+         get-ready cue -> countdown -> photo     (repeat x3)
+         -> thank you -> print strip (final screen) -> reset
+
+   If the camera or printer fails, the burned code is given back via
+   POST /api/release and the error screen tells the guest to retry.
+   Tune lengths & timings in CONFIG. No sound is used.
+   ================================================================= */
+
+const CONFIG = {
+  codeLength:      6,
+  photos:          3,
+  countdownFrom:   5,         // counts 5..1
+  countdownStepMs: 1000,
+  cueMs:           1100,
+  flashMs:         280,
+  afterCaptureMs:  2000,      // pause after each shot so the flash recharges
+                              // fully -- measured: at ~7s between shots the
+                              // 5th flash already came back weaker (144 vs 172)
+  successBeatMs:   800,
+  thanksMs:        2800,
+  printMs:         4600,
+  finalHoldMs:     8000,       // printing screen stays, then auto-reset
+  errorHoldMs:     9000        // error screen stays, then auto-reset
+};
+
+/* ---- backend wiring (talks to server.js) ---- */
+const session = { id: null, photos: [] };
+async function post(url, body){
+  const r = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
+  return r.json();
+}
+const API = {
+  validate: code  => post("/api/validate", { code }),
+  capture:  index => post("/api/capture",  { sessionId: session.id, index }),
+  print:    ()    => post("/api/print",    { sessionId: session.id }),
+  release:  ()    => post("/api/release",  { sessionId: session.id }),
+};
+
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const restart = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+
+let code = "";
+let locked = false;
+
+const slotsEl = $("#slots");
+const msgEl   = $("#entryMsg");
+const pdotsEl = $("#pdots");
+
+for (let i = 0; i < CONFIG.codeLength; i++){ const s = document.createElement("div"); s.className = "slot"; s.innerHTML = '<span class="dot"></span>'; slotsEl.appendChild(s); }
+for (let i = 0; i < CONFIG.photos; i++){ const d = document.createElement("span"); d.className = "pdot"; pdotsEl.appendChild(d); }
+
+function updateNext(){ [...slotsEl.children].forEach((s, i) => s.classList.toggle("next", i === code.length && !locked)); }
+function setSlot(i, v){ const s = slotsEl.children[i]; s.classList.add("filled"); s.innerHTML = '<span class="digit">' + v + '</span>'; }
+function clearSlot(i){ const s = slotsEl.children[i]; s.classList.remove("filled"); s.innerHTML = '<span class="dot"></span>'; }
+function resetSlots(){ [...slotsEl.children].forEach(s => { s.classList.remove("filled", "next"); s.innerHTML = '<span class="dot"></span>'; }); updateNext(); }
+
+function showScreen(id){ document.querySelectorAll(".screen").forEach(s => s.classList.remove("active")); $("#" + id).classList.add("active"); }
+
+/* premium tactile ripple from the touch point */
+function ripple(k, e){
+  const r = document.createElement("span"); r.className = "ink";
+  const rect = k.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height) * 1.5;
+  r.style.width = r.style.height = size + "px";
+  r.style.left = (e.clientX - rect.left) + "px";
+  r.style.top  = (e.clientY - rect.top) + "px";
+  k.appendChild(r); setTimeout(() => r.remove(), 600);
+}
+
+function pressDigit(d){
+  if (locked || code.length >= CONFIG.codeLength) return;
+  const i = code.length; code += d; setSlot(i, d); updateNext();
+  if (code.length === CONFIG.codeLength){ locked = true; setTimeout(validate, 300); }
+}
+function pressDelete(){ if (locked || !code.length) return; const i = code.length - 1; code = code.slice(0, -1); clearSlot(i); updateNext(); }
+
+async function validate(){
+  let res;
+  try { res = await API.validate(code); } catch (e) { res = { status: "error" }; }
+  if (res.status === "ok"){ session.id = res.sessionId; session.photos = []; setTimeout(startSession, CONFIG.successBeatMs); return; }
+  msgEl.textContent = res.status === "used"
+    ? "this code's already been used"
+    : "that code didn't work \u2014 check your card";
+  slotsEl.classList.add("error"); msgEl.classList.add("show");
+  setTimeout(() => { slotsEl.classList.remove("error"); msgEl.classList.remove("show"); code = ""; locked = false; resetSlots(); }, 1600);
+}
+
+$("#keypad").addEventListener("pointerdown", e => {
+  const k = e.target.closest(".key"); if (!k || k.classList.contains("ghost")) return;
+  k.classList.add("press"); ripple(k, e);
+  if (k.dataset.del !== undefined) pressDelete();
+  else if (k.dataset.d) pressDigit(k.dataset.d);
+});
+$("#keypad").addEventListener("pointerup",   e => { const k = e.target.closest(".key"); if (k) k.classList.remove("press"); });
+$("#keypad").addEventListener("pointerleave",e => { const k = e.target.closest(".key"); if (k) k.classList.remove("press"); }, true);
+window.addEventListener("keydown", e => {
+  if (!$("#screen-entry").classList.contains("active")) return;
+  if (/^[0-9]$/.test(e.key)) pressDigit(e.key);
+  else if (e.key === "Backspace") pressDelete();
+});
+
+/* ------------------------- capture session ------------------------ */
+async function startSession(){
+  resetSlots();
+  [...pdotsEl.children].forEach(d => d.classList.remove("on"));
+  showScreen("screen-capture");
+  await sleep(650);
+
+  try {
+    for (let i = 0; i < CONFIG.photos; i++){
+      $("#progCount").textContent = (i + 1) + " / " + CONFIG.photos;
+      await showCue(i);
+      await countdown();
+      await capture(i);
+      await sleep(CONFIG.afterCaptureMs);
+    }
+  } catch (e) { return failSession(); }
+
+  showScreen("screen-thanks");
+  await sleep(CONFIG.thanksMs);
+
+  showScreen("screen-print");
+  const printed = await printStrip();
+  if (!printed) return failSession();
+  await sleep(CONFIG.finalHoldMs);
+
+  // only auto-reset if the guest hasn't tapped through already
+  if ($("#screen-print").classList.contains("active")) resetToEntry();
+}
+
+/* camera/printer failed -> give the code back + show the error screen */
+async function failSession(){
+  try { await API.release(); } catch (e) {}
+  session.id = null;
+  showScreen("screen-error");
+  await sleep(CONFIG.errorHoldMs);
+  if ($("#screen-error").classList.contains("active")) resetToEntry();
+}
+
+const CUES = ["get ready", "again &#9825;", "last one &#9825;"];
+async function showCue(i){ const c = $("#capCue"); c.innerHTML = '<span class="txt">' + (CUES[i] || "get ready") + '</span>'; restart(c, "show"); $("#cdNumber").textContent = ""; $("#cdBar").style.strokeDashoffset = CIRC; await sleep(CONFIG.cueMs); }
+
+const R = 138, CIRC = 2 * Math.PI * R;
+$("#cdBar").style.strokeDasharray = CIRC;
+async function countdown(){
+  const bar = $("#cdBar");
+  const total = CONFIG.countdownFrom * CONFIG.countdownStepMs;
+  const start = performance.now();
+  let raf;
+  const stepFn = now => { const f = Math.min((now - start) / total, 1); bar.style.strokeDashoffset = CIRC * f; if (f < 1) raf = requestAnimationFrame(stepFn); };
+  bar.style.strokeDashoffset = 0; raf = requestAnimationFrame(stepFn);
+
+  for (let n = CONFIG.countdownFrom; n >= 1; n--){ const num = $("#cdNumber"); num.textContent = n; restart(num, "pop"); await sleep(CONFIG.countdownStepMs); }
+  cancelAnimationFrame(raf); bar.style.strokeDashoffset = CIRC; $("#cdNumber").textContent = "";
+}
+
+async function capture(i){
+  const hold = $("#capHold");
+  hold.classList.add("show");        // "hold still" — stays up during transfer
+  restart($("#flash"), "go");
+  try {
+    let r = null;
+    try { r = await API.capture(i); } catch (e) {}
+    if (!r || !r.ok || !r.url) {                   // one silent retry, then give up
+      try { r = await API.capture(i); } catch (e) {}
+    }
+    if (!r || !r.ok || !r.url) throw new Error("capture failed");
+    session.photos[i] = r.url;
+    pdotsEl.children[i].classList.add("on");
+    await sleep(CONFIG.flashMs);
+  } finally {
+    hold.classList.remove("show");   // also clears it when the capture fails
+  }
+}
+
+async function printStrip(){
+  const strip = $("#strip"), bar = $("#printBar"), hint = $("#tapHint");
+  const cells = strip.querySelectorAll("[data-cell]");
+  strip.classList.remove("in"); bar.style.transition = "none"; bar.style.width = "0%";
+  cells.forEach(c => { c.classList.remove("dev"); c.style.backgroundImage = ""; }); hint.classList.remove("show");
+  void strip.offsetWidth;
+  strip.classList.add("in");
+  let result = null;
+  try { result = await API.print(); } catch (e) {}
+  if (!result || !result.ok) return false;         // print failed -> error screen
+  bar.style.transition = "width " + CONFIG.printMs + "ms linear";
+  requestAnimationFrame(() => { bar.style.width = "100%"; });
+  cells.forEach((c, i) => setTimeout(() => {
+    if (session.photos[i]) { c.style.backgroundImage = "url('" + session.photos[i] + "')"; c.style.backgroundSize = "cover"; c.style.backgroundPosition = "center"; }
+    c.classList.add("dev");
+  }, 700 + i * 560));
+  await sleep(CONFIG.printMs);
+  hint.classList.add("show");
+  return true;
+}
+
+function resetToEntry(){
+  code = ""; locked = false; session.id = null;
+  slotsEl.classList.remove("error"); msgEl.classList.remove("show");
+  resetSlots(); showScreen("screen-entry");
+}
+$("#screen-print").addEventListener("pointerdown", () => { if ($("#tapHint").classList.contains("show")) resetToEntry(); });
+$("#screen-error").addEventListener("pointerdown", resetToEntry);
+
+function fit(){
+  const b = $("#bezel");
+  const s = Math.min(window.innerWidth / 1024, window.innerHeight / 600);
+  b.style.transform = "translate(-50%,-50%) scale(" + s + ")";
+}
+window.addEventListener("resize", fit);
+document.fonts && document.fonts.ready.then(fit);
+window.addEventListener("load", fit);
+fit();
+
+resetSlots();
+</script>
+</body>
+</html>

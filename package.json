@@ -1,0 +1,16 @@
+{
+  "name": "franz-photobooth",
+  "version": "1.0.0",
+  "description": "fr-anz photobooth — kiosk flow, voucher codes, strip print (camera & printer wired on the booth PC)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "generate-codes": "node scripts/generate-codes.js"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "express": "^4.19.2",
+    "jimp": "0.22.12"
+  }
+}
