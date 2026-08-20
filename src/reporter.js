@@ -117,7 +117,11 @@ function cursor() { return readJson(CURSOR, { lastAt: null, lastId: null }); }
 function pendingEvents() {
   const c = cursor();
   const all = events.all();
-  if (!c.lastAt) return all.slice(-MAX_EVENTS_PER_PACKET);
+  // First run drains from the OLDEST end, not the newest. Taking the tail
+  // instead would send the most recent few, move the cursor past them, and
+  // silently discard everything before -- the entire backlog, on the one
+  // run where the backlog is largest.
+  if (!c.lastAt) return all.slice(0, MAX_EVENTS_PER_PACKET);
   const cut = new Date(c.lastAt).getTime();
   return all.filter(e => e.date.getTime() > cut || (e.date.getTime() === cut && e.id !== c.lastId))
             .slice(0, MAX_EVENTS_PER_PACKET);

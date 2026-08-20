@@ -340,6 +340,24 @@ function flashWarnings(limit = 5) {
 
 /* ===================== the whole picture ============================ */
 
+/**
+ * What the cloud is allowed to see of the code store.
+ *
+ * codeStats.usedList carries every voucher ever redeemed, in plain text.
+ * Two reasons it must not travel: a released code becomes redeemable
+ * again, so that list is money in a table anyone signed in could read;
+ * and it only ever grows, which would put an unbounded blob into every
+ * one of the ~2,880 heartbeats a day.
+ *
+ * /admin still shows the full list: server.js hands it to the page
+ * separately, straight from codes.stats(), so nothing on screen is lost
+ * and nothing extra leaves the booth.
+ */
+function publicCodeStats(codeStats) {
+  const { usedList, ...rest } = codeStats || {};
+  return { ...rest, usedCount: Array.isArray(usedList) ? usedList.length : 0 };
+}
+
 function collect(codeStats) {
   const files = printFiles();
   const allPrints = files.guest.concat(files.staff);
@@ -382,7 +400,7 @@ function collect(codeStats) {
   };
 
   return {
-    codes: codeStats,
+    codes: publicCodeStats(codeStats),
     special: { staffQuota: special.staffQuota() },
     printer: pr,
     hotFolder: hf,

@@ -237,7 +237,7 @@ app.post("/api/release", (req, res) => {
   const s = sessions.get(sessionId);
   if (!s) return res.json({ ok: true, released: false });
   sessions.delete(sessionId);
-  const released = codes.release(s.code).released;   // master: no, staff: refunds the daily use
+  const released = codes.release(s.code, { fromFailedSession: true }).released;
   console.log(`[release] session ${sessionId} (${s.kind}) -> code ${s.code}${released ? " released" : " (not released)"}`);
   events.log("session_released", { sessionId, kind: s.kind, released });
   res.json({ ok: true, released });
@@ -315,8 +315,10 @@ app.post("/admin/testprint", requireLogin, async (req, res) => {
 
 // The control centre: numbers, charts, code management, quick actions.
 app.get("/admin", requireLogin, (req, res) => {
-  const s = stats.collect(codes.stats());
+  const raw = codes.stats();
+  const s = stats.collect(raw);
   res.send(adminPage.page(s, {
+    usedList: raw.usedList,     // stays on this PC -- never part of the snapshot
     msg: req.query.msg || "",
     testMode: config.TEST_MODE,
     host: config.HOST,

@@ -40,6 +40,10 @@ function barChart(points, labelFn, opts = {}) {
 
 function page(s, opts) {
   const { msg, testMode, host, port, special } = opts;
+  // Straight from codes.stats() on this PC, deliberately NOT from the
+  // collected snapshot: the snapshot is what gets shipped to the cloud,
+  // and a list of every redeemed voucher is not something to publish.
+  const usedList = opts.usedList || [];
   const sq = (special && special.staffQuota) || { used: 0, limit: 0, left: 0 };
   const pr = s.printer;
 
@@ -217,7 +221,7 @@ ${s.flashWarnings.length ? `<div class="warnbox"><b>The flash misfired recently.
     <table>
       <thead><tr><th>Code</th><th>Used at</th><th>Batch</th><th></th></tr></thead>
       <tbody>
-        ${s.codes.usedList.length ? s.codes.usedList.slice(0, 60).map(u => `<tr>
+        ${usedList.length ? usedList.slice(0, 60).map(u => `<tr>
           <td class="mono">${esc(u.code)}</td>
           <td>${new Date(u.usedAt).toLocaleString()}</td>
           <td>${esc(u.batch == null ? "?" : u.batch)}</td>

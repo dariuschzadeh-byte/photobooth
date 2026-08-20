@@ -20,7 +20,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const config = require("../config");
-const { MASTER_CODE } = require("../src/codes");
+const special = require("../src/specialcodes");
 
 const FILE = config.paths.codesFile;
 
@@ -51,12 +51,22 @@ if (replace) {
   db = { batches: [], codes: {} };
 }
 
-// cryptographically-random, zero-padded, unique vs master code + existing store
+// Cryptographically random, zero padded, and clear of BOTH special codes as
+// well as the existing store.
+//
+// This line used to compare against a constant destructured from
+// ../src/codes. That export disappeared when the codes moved into
+// data/secrets.json, so the constant silently became undefined, the guard
+// could never be true, and the staff code was never checked at all. Since
+// the README points here for producing card codes, a run could mint a
+// voucher equal to a special code -- and kindOf() is consulted before the
+// store, so that card would print forever and never burn.
+const reserved = special.reserved();
 const batch = db.batches.reduce((m, b) => Math.max(m, b.batch), 0) + 1;
 const fresh = new Set();
 while (fresh.size < count) {
   const code = String(crypto.randomInt(0, max)).padStart(LEN, "0");
-  if (code === MASTER_CODE || db.codes[code] || fresh.has(code)) continue;
+  if (reserved.has(code) || db.codes[code] || fresh.has(code)) continue;
   fresh.add(code);
 }
 const codes = [...fresh];

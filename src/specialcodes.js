@@ -57,19 +57,42 @@ function randomCode() {
 let cache = null;
 
 /**
+ * Every voucher currently in the store, read straight off disk.
+ *
+ * Read here rather than accepted from the caller, and that is the whole
+ * point. It used to be a parameter, which meant the exclusion below only
+ * happened if codes.js got to load() first -- and it does not: stats.js
+ * requires this module directly and reaches staffQuota() during the very
+ * first heartbeat, priming the cache with an EMPTY set. A master code
+ * could then be minted on top of a card already in someone's wallet, and
+ * because kindOf() is checked before the store, that card would print
+ * forever without ever burning. Reading the file makes the guard
+ * unconditional.
+ */
+function vouchersOnDisk() {
+  try {
+    const db = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "codes.json"), "utf8"));
+    return new Set(Object.keys(db.codes || {}));
+  } catch (e) {
+    return new Set();          // no store yet: nothing to collide with
+  }
+}
+
+/**
  * Load both codes, creating them on first run.
  *
- * `taken` is a set of codes that must not be handed out -- the live voucher
- * store. A master code that is also a guest voucher would burn a real card
- * every time you test, so the two namespaces must never overlap.
+ * `extraTaken` is merged on top of what is already on disk -- callers can
+ * add to the exclusion set, but can never shrink it.
  */
-function load(taken = new Set()) {
+function load(extraTaken = new Set()) {
   if (cache) return cache;
 
   let s = readJson(FILE, null);
   let created = false;
 
   if (!s || !/^\d{6}$/.test(String(s.masterCode || "")) || !/^\d{6}$/.test(String(s.staffCode || ""))) {
+    const taken = vouchersOnDisk();
+    for (const c of extraTaken) taken.add(c);
     const pick = () => { let c; do { c = randomCode(); } while (taken.has(c)); return c; };
     const masterCode = pick();
     let staffCode; do { staffCode = pick(); } while (staffCode === masterCode);
@@ -138,6 +161,11 @@ function spendStaffUse() {
 /**
  * Give a staff use back -- the camera or printer died, so the crew never got
  * their strip. Same courtesy the guest vouchers get in codes.release().
+ *
+ * Only ever called for a session that actually failed (see codes.release).
+ * Wiring it to the staff-facing "release a code" button instead would turn
+ * "twice a day" into "as often as you like": press it twice and the
+ * allowance is back at zero used.
  */
 function refundStaffUse() {
   const u = usage();

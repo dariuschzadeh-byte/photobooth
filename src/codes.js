@@ -101,13 +101,23 @@ function validateAndRedeem(input) {
   return { valid: true };
 }
 
-/** Give a burned code back (failed session / staff action). */
-function release(input) {
+/**
+ * Give a burned code back.
+ *
+ * `fromFailedSession` matters for the staff code and only for the staff
+ * code. A session that died gets its daily use back, which is fair. The
+ * same call reachable from a button -- /admin or the cloud dashboard --
+ * would not be: pressing it twice puts the allowance back to zero used and
+ * "twice a day" means nothing. Guest vouchers have no such limit to game,
+ * so they are released either way.
+ */
+function release(input, { fromFailedSession = false } = {}) {
   const code = String(input || "").trim();
   const kind = sc().kindOf(code);
 
   if (kind === "master") return { released: false, reason: "master" };
   if (kind === "staff") {
+    if (!fromFailedSession) return { released: false, reason: "staff_quota_not_refundable", kind: "staff" };
     const ok = sc().refundStaffUse();
     if (ok) logLine(`${new Date().toISOString()}  ${code}  STAFF REFUNDED`);
     return { released: ok, reason: ok ? null : "nothing_to_refund", kind: "staff" };
