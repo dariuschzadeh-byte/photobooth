@@ -19,7 +19,9 @@ with a plain `npm install`.
 |---|---|
 | Start manually | Desktop icon **1 - START PHOTOBOOTH** |
 | Stop | Desktop icon **2 - STOP PHOTOBOOTH** (or `Alt+F4` on the guest screen) |
-| Staff/test code | **731790** — always valid, never uses up a voucher |
+| Staff code | for the morning sample strip — works **2× a day**, resets at midnight |
+| Master code | yours, unlimited, never uses up a voucher |
+| Where are the codes? | on the **admin page** — they are never written down in this repo |
 | Admin page | <http://localhost:3000/admin> — codes left, release a code, test print |
 
 The printed staff guide is `BOOTH-GUIDE.html` (open it and press Ctrl+P).

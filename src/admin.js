@@ -39,7 +39,8 @@ function barChart(points, labelFn, opts = {}) {
 }
 
 function page(s, opts) {
-  const { msg, testMode, host, port, masterCode } = opts;
+  const { msg, testMode, host, port, special } = opts;
+  const sq = (special && special.staffQuota) || { used: 0, limit: 0, left: 0 };
   const pr = s.printer;
 
   const mediaPct = Math.min(100, Math.round((pr.sheets / 700) * 100));
@@ -120,7 +121,7 @@ td.mono,.mono{font-family:ui-monospace,Consolas,monospace;font-variant-numeric:t
 <header>
   <div>
     <h1>fr-anz &mdash; booth control</h1>
-    <div class="sub">${testMode ? "TEST mode (no hardware)" : "LIVE"} &middot; http://${esc(host)}:${port} &middot; staff code <b class="mono">${esc(masterCode)}</b></div>
+    <div class="sub">${testMode ? "TEST mode (no hardware)" : "LIVE"} &middot; http://${esc(host)}:${port} &middot; staff code <b class="mono">${esc(special.staffCode)}</b> (${sq.left} of ${sq.limit} left today)</div>
   </div>
   <div class="chips">
     <span class="chip ${pr.online ? "good" : "bad"}">printer ${pr.online ? "online" : "offline"}</span>
@@ -235,7 +236,10 @@ ${s.flashWarnings.length ? `<div class="warnbox"><b>The flash misfired recently.
     <tr><td><b>Start</b></td><td>Desktop icon <b>1 - START PHOTOBOOTH</b> (or it starts by itself when the PC boots)</td></tr>
     <tr><td><b>Stop</b></td><td>Desktop icon <b>2 - STOP PHOTOBOOTH</b></td></tr>
     <tr><td><b>Back to desktop</b></td><td><b>Windows + D</b> &mdash; the booth keeps running</td></tr>
-    <tr><td><b>Staff code</b></td><td class="mono">${esc(masterCode)} &mdash; always works, never uses up a voucher</td></tr>
+    <tr><td><b>Staff code</b></td><td><span class="mono">${esc(special.staffCode)}</span> &mdash; for the morning sample strip.
+        Works <b>${sq.limit}&times; a day</b>, resets at midnight. Used today: <b>${sq.used} of ${sq.limit}</b>.</td></tr>
+    <tr><td><b>Master code</b></td><td><span class="mono">${esc(special.masterCode)}</span> &mdash; owner only, unlimited, never uses up a voucher.
+        Keep it off the cards and out of git.</td></tr>
     <tr><td><b>Nothing prints</b></td><td>DNP Hot Folder Print is not running &mdash; start the booth again via icon 1</td></tr>
     <tr><td><b>Black photos</b></td><td>The flash did not fire &mdash; check the sync cable and its plugs</td></tr>
   </tbody></table></div>

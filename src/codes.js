@@ -1,8 +1,10 @@
 /* =====================================================================
    codes.js -- voucher validation, single-use redemption, tracking
    ---------------------------------------------------------------------
-   - MASTER_CODE always validates and is NEVER burned (staff/testing).
-     It only exists here in the code, never printed on a card.
+   - Two special codes bypass the voucher store entirely (see
+     src/specialcodes.js): MASTER never runs out, STAFF works a fixed
+     number of times per day. Neither is ever printed on a card, and
+     neither lives in this file any more -- they were on public GitHub.
    - A real card code is valid exactly ONCE. After redemption it is
      marked "used" with a timestamp and cannot be used again.
    - release() gives a burned code back (failed session or staff action
@@ -15,9 +17,24 @@
 const fs = require("fs");
 const path = require("path");
 
-const MASTER_CODE = "731790";                         // staff only -- never on a card
+const special = require("./specialcodes");
 const FILE = path.join(__dirname, "..", "data", "codes.json");
 const LOG  = path.join(__dirname, "..", "data", "redemptions.log");
+
+/**
+ * The special codes are generated on first run, and must not land on a code
+ * that is already printed on someone's card. They therefore need to see the
+ * voucher store -- but only once, and only after it has been read, which is
+ * why this is lazy instead of a plain require-time call.
+ */
+let specialReady = false;
+function sc() {
+  if (!specialReady) {
+    specialReady = true;                                // set first: load() must not recurse
+    try { special.load(new Set(Object.keys(load().codes))); } catch (e) {}
+  }
+  return special;
+}
 
 function load() {
   if (!fs.existsSync(FILE)) return { batches: [], codes: {} };
@@ -47,9 +64,25 @@ function logLine(text) {
 function validateAndRedeem(input) {
   const code = String(input || "").trim();
 
-  if (code === MASTER_CODE) {
-    return { valid: true, master: true };             // never burned
+  const kind = sc().kindOf(code);
+
+  if (kind === "master") {
+    return { valid: true, special: true, kind: "master" };   // never burned
   }
+
+  if (kind === "staff") {
+    // Spend first, then report. If the session later fails, /api/release
+    // hands the use back -- exactly what happens to a guest voucher.
+    if (!sc().spendStaffUse()) {
+      const quota = sc().staffQuota();
+      logLine(`${new Date().toISOString()}  ${code}  STAFF DENIED  ${quota.used}/${quota.limit} today`);
+      return { valid: false, reason: "staff_limit", quota };
+    }
+    const quota = sc().staffQuota();
+    logLine(`${new Date().toISOString()}  ${code}  STAFF USED  ${quota.used}/${quota.limit} today`);
+    return { valid: true, special: true, kind: "staff", quota };
+  }
+
   if (!/^\d{6}$/.test(code)) {
     return { valid: false, reason: "invalid" };
   }
@@ -71,7 +104,14 @@ function validateAndRedeem(input) {
 /** Give a burned code back (failed session / staff action). */
 function release(input) {
   const code = String(input || "").trim();
-  if (code === MASTER_CODE) return { released: false, reason: "master" };
+  const kind = sc().kindOf(code);
+
+  if (kind === "master") return { released: false, reason: "master" };
+  if (kind === "staff") {
+    const ok = sc().refundStaffUse();
+    if (ok) logLine(`${new Date().toISOString()}  ${code}  STAFF REFUNDED`);
+    return { released: ok, reason: ok ? null : "nothing_to_refund", kind: "staff" };
+  }
 
   const db = load();
   const entry = db.codes[code];
@@ -125,10 +165,11 @@ function generateBatch(count) {
   const db = load();
   const batch = db.batches.reduce((m, b) => Math.max(m, b.batch), 0) + 1;
 
+  const reserved = sc().reserved();
   const fresh = new Set();
   while (fresh.size < count) {
     const code = String(crypto.randomInt(0, max)).padStart(LEN, "0");
-    if (code === MASTER_CODE || db.codes[code] || fresh.has(code)) continue;
+    if (reserved.has(code) || db.codes[code] || fresh.has(code)) continue;
     fresh.add(code);
   }
   for (const c of fresh) db.codes[c] = { status: "unused", usedAt: null, batch };
@@ -138,4 +179,9 @@ function generateBatch(count) {
   return { batch, added: fresh.size, total: Object.keys(db.codes).length };
 }
 
-module.exports = { validateAndRedeem, release, stats, unusedCodes, generateBatch, MASTER_CODE };
+/** The two special codes plus today's staff allowance -- for /admin. */
+function specialCodes() {
+  return { ...sc().codes(), staffQuota: sc().staffQuota() };
+}
+
+module.exports = { validateAndRedeem, release, stats, unusedCodes, generateBatch, specialCodes };

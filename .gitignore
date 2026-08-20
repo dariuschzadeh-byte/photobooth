@@ -4,9 +4,19 @@
 # The voucher codes are the booth's money: anyone who can read codes.json
 # or a codes CSV can take free photo strips. Guest photos are personal
 # data and belong on the booth PC only.
+#
+# data/secrets.json holds the master and staff codes. Six digits cannot be
+# protected by hashing -- a laptop tries all million in under a second -- so
+# the only real protection is that this file never leaves the booth PC.
+# The booth generates its own on first start; /admin shows them.
 # ---------------------------------------------------------------------
 data/codes.json
 data/codes.json.*
+data/secrets.json
+data/staff-usage.json
+data/cloud.json
+data/reporter-cursor.json
+data/events.log
 data/codes-*.csv
 data/redemptions.log
 data/server.log

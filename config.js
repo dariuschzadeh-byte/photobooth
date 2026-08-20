@@ -26,6 +26,28 @@ module.exports = {
   codeLength: 6,
   photos: 3,
 
+  // ---- operations ----------------------------------------------------
+  // What turns a number into a decision. "50 sheets left" says nothing on
+  // its own; "9 days left, delivery takes 21" says order today.
+  ops: {
+    // Cafe opening hours, booth PC local time (24h). The dashboard only
+    // raises the offline alarm inside this window -- a dark booth at 3am is
+    // the PC being switched off for the night, not a fault.
+    openFrom: 7,
+    openTo: 22,
+    timezone: "Asia/Makassar",     // WITA, for the cloud dashboard's labels
+
+    mediaLeadTimeDays: 21,         // how long DNP media takes to reach Bali
+    costPerSheetIDR: 0,            // paper + ribbon per 4x6 sheet (= 2 strips)
+    lowMediaSheets: 50,            // hard floor, whatever the lead-time maths says
+    lowCodesPercent: 15,           // warn below this share of a batch unused
+
+    // A strip that has sat unprinted in the hot folder for longer than this
+    // means Hot Folder Print is not running. This is the failure that cost
+    // us every print after 13 Jul 2026 -- it looks perfectly healthy.
+    hotFolderStuckMinutes: 2,
+  },
+
   // Auto-delete session photos + prints older than this many days on startup.
   // 0 = keep everything forever (current setting -- the cafe may want the photos).
   outputRetentionDays: 0,
@@ -45,6 +67,11 @@ module.exports = {
 
     // Clean grade -- SOFT (less contrast, gentle sharpen)
     grade: {
+      // Set to false to print the camera JPEG untouched, the way the booth
+      // did until June. Use it to settle "is this the camera or the
+      // software?" -- scripts/compare-look.js renders both without using
+      // any paper.
+      enabled: true,
       // These gains are deliberately UNEQUAL -- they cancel a red cast coming
       // from the camera, measured against the white t-shirt (R244 G174 B166).
       // Only valid while the camera's white balance is set to FLASH. If the
@@ -52,14 +79,28 @@ module.exports = {
       // a neutral 1.10/1.10/1.10 would bring the red cast straight back.
       rGain: 1.00, gGain: 1.10, bGain: 1.13,
       sat: 0.94,              // lower = softer pastel (was 0.97)
-      shadowLift: 0.22,       // lifts dark areas: faces, navy shirt (was 0)
+
+      // Fraction of the full range added to the darkest areas. This stood
+      // at 0.22 and never lifted anything: the code treated it as raw
+      // levels, so it added 0.22 of 255. Now that it works it starts at 0,
+      // which keeps the print as it is today (measured: 1-2 levels of 255
+      // on a tenth of the pixels, invisible in dye-sub). 0.03-0.06 is a
+      // gentle but real lift -- set it while looking at an actual photo.
+      shadowLift: 0,
       contrast: 0.98,         // less contrast, eases the hot top frame (was 0.97)
       sharpRadius: 2,
       sharpAmount: 0.07,      // main softness lever: lower = hazier / film-soft (was 0.12)
     },
 
-    // Soft backdrop gradient -- bright centre, deeper pink toward the edges
+    // Soft backdrop gradient -- bright centre, deeper pink toward the edges.
+    //
+    // Careful with this one when the background looks wrong: the bright
+    // spot it protects sits at headBias, i.e. right where the backdrop
+    // shows above people's heads, while everything around it is dimmed by
+    // up to `strength`. A reflection landing there is made more prominent,
+    // not less. Set enabled:false to take it out of the picture entirely.
     backdrop: {
+      enabled: true,
       strength: 0.18,         // lower = lighter, more even background (was 0.20)
       satBoost: 0.0,
       headBias: 0.42,

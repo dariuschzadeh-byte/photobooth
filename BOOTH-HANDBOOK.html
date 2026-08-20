@@ -193,8 +193,8 @@ pre code{background:none;padding:0;white-space:pre;color:var(--ink)}
     <div class="qhead">Every day you need only these four</div>
     <div class="qgrid">
       <div class="qcell">
-        <div class="lbl">Staff / test code</div>
-        <div class="val">731790</div>
+        <div class="lbl">Staff code (2&times; a day)</div>
+        <div class="val" style="font-size:.62em">see /admin</div>
       </div>
       <div class="qcell">
         <div class="lbl">Start the booth</div>
@@ -237,7 +237,7 @@ pre code{background:none;padding:0;white-space:pre;color:var(--ink)}
       <li><strong>PC on.</strong> The booth starts automatically &mdash; give it about a minute.</li>
       <li><strong>Check the screen</strong> shows <em>"enter your code"</em> with the keypad. That means it is ready.</li>
       <li><strong>Test print.</strong> Open <code>localhost:3000/admin</code> and press <em>print test strip</em>. If a strip comes out, printer and layout are confirmed.</li>
-      <li><strong>Full test</strong> (optional): type <code>731790</code> in the booth and run three photos. This also confirms camera and flash.</li>
+      <li><strong>Full test</strong> (optional): type the <strong>staff code</strong> in the booth and run three photos. This also confirms camera and flash. You have two staff runs per day; after that use the master code.</li>
     </ol>
 
     <h3>Getting back to the desktop</h3>
@@ -279,7 +279,8 @@ pre code{background:none;padding:0;white-space:pre;color:var(--ink)}
         <thead><tr><th>What</th><th>Behaviour</th></tr></thead>
         <tbody>
           <tr><td class="setting">A guest card</td><td>Works once. After that the screen says <em>"this code's already been used"</em>.</td></tr>
-          <tr><td class="setting">Staff code <span class="pill">731790</span></td><td>Always works, never uses up a voucher, never appears in the statistics. Use it for testing as often as you like &mdash; but never print it on a card.</td></tr>
+          <tr><td class="setting">Staff code <span class="pill">2&times; a day</span></td><td>For the morning sample strip. Works twice per calendar day and resets at midnight. Never uses up a voucher, and is counted separately from guest business in the statistics. Shown on the admin page &mdash; never print it on a card.</td></tr>
+          <tr><td class="setting">Master code <span class="pill">owner</span></td><td>Unlimited, never burned. For the owner only. Shown on the admin page. Neither code is stored in the project files, so neither can leak through GitHub.</td></tr>
           <tr><td class="setting">Failed session</td><td>If the camera or printer fails mid-session, the code is <strong>given back automatically</strong> and the guest can simply retype it.</td></tr>
         </tbody>
       </table>
@@ -484,7 +485,7 @@ node scripts/generate-codes.js 250 --replace # wipes the store (refuses without 
   </section>
 
   <div class="footnote">
-    fr-anz photobooth &middot; Pererenan, Bali &middot; Staff code <strong>731790</strong> &middot; Admin page <strong>localhost:3000/admin</strong><br>
+    fr-anz photobooth &middot; Pererenan, Bali &middot; Staff &amp; master code on the admin page &middot; Admin page <strong>localhost:3000/admin</strong><br>
     Anything this handbook does not cover: contact Dariusch.
   </div>
 

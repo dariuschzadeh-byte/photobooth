@@ -25,13 +25,23 @@ function clamp(v){ return v < 0 ? 0 : v > 255 ? 255 : v; }
 /* ---- clean flash grade: colour + saturation + shadow lift + contrast + unsharp ---- */
 function flashGrade(img){
   const g = S.grade;
+  if (g.enabled === false) return img;
   img.scan(0,0,img.bitmap.width,img.bitmap.height,function(x,y,idx){
     let r=this.bitmap.data[idx], gr=this.bitmap.data[idx+1], b=this.bitmap.data[idx+2];
     r*=g.rGain; gr*=g.gGain; b*=g.bGain;
     r=clamp(r); gr=clamp(gr); b=clamp(b);
     let lum=0.299*r+0.587*gr+0.114*b;
     r=lum+(r-lum)*g.sat; gr=lum+(gr-lum)*g.sat; b=lum+(b-lum)*g.sat;
-    const mean=(r+gr+b)/3, m=Math.pow(1-mean/255,2), lift=g.shadowLift*m;
+    // shadowLift is a FRACTION of the full range, hence the *255.
+    //
+    // The old code left that factor out, so the lever added at most 0.22 of
+    // 255 levels while its comment claimed to be lifting faces and the navy
+    // shirt. It never did. It was not quite nothing either: the values land
+    // in a Uint8Array, which truncates, so a sub-level addition still
+    // nudged about a tenth of all channels by one step. Measured against
+    // the old build, turning it off moves 11% of channels by 1-2 of 255 --
+    // far under anything a dye-sub printer can resolve.
+    const mean=(r+gr+b)/3, m=Math.pow(1-mean/255,2), lift=g.shadowLift*255*m;
     r+=lift; gr+=lift; b+=lift;
     r=(r-128)*g.contrast+128; gr=(gr-128)*g.contrast+128; b=(b-128)*g.contrast+128;
     this.bitmap.data[idx]=clamp(r); this.bitmap.data[idx+1]=clamp(gr); this.bitmap.data[idx+2]=clamp(b);
@@ -50,6 +60,7 @@ function flashGrade(img){
 
 /* ---- soft rhode backdrop gradient: bright centre, deeper pink toward edges ---- */
 function backdropGradient(img){
+  if (S.backdrop.enabled === false) return img;
   const w=img.bitmap.width, h=img.bitmap.height;
   const cx=w/2, cy=h*S.backdrop.headBias;
   const str=S.backdrop.strength, satb=S.backdrop.satBoost, p=S.backdrop.falloff;
@@ -108,4 +119,4 @@ async function buildStrip(photoPaths, outPath){
   return outPath;
 }
 
-module.exports = { buildStrip, W: SHEET_W, H, STRIP_W, SHEET_W };
+module.exports = { buildStrip, flashGrade, backdropGradient, W: SHEET_W, H, STRIP_W, SHEET_W };

@@ -438,9 +438,9 @@ async function validate(){
   let res;
   try { res = await API.validate(code); } catch (e) { res = { status: "error" }; }
   if (res.status === "ok"){ session.id = res.sessionId; session.photos = []; setTimeout(startSession, CONFIG.successBeatMs); return; }
-  msgEl.textContent = res.status === "used"
-    ? "this code's already been used"
-    : "that code didn't work \u2014 check your card";
+  msgEl.textContent = res.status === "used"        ? "this code's already been used"
+                    : res.status === "staff_limit" ? "staff code is used up for today"
+                    : "that code didn't work \u2014 check your card";
   slotsEl.classList.add("error"); msgEl.classList.add("show");
   setTimeout(() => { slotsEl.classList.remove("error"); msgEl.classList.remove("show"); code = ""; locked = false; resetSlots(); }, 1600);
 }

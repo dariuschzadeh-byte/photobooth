@@ -21,6 +21,7 @@ const Jimp = require("jimp");
 const config = require("./config");
 const codes = require("./src/codes");
 const stats = require("./src/stats");
+const events = require("./src/events");
 const adminPage = require("./src/admin");
 const auth = require("./src/auth");
 const camera = require("./src/camera");
@@ -60,7 +61,7 @@ app.use(express.static(config.paths.public));
 app.use("/sessions", express.static(config.paths.sessions));
 app.use("/prints", express.static(config.paths.prints));
 
-const sessions = new Map(); // id -> { dir, photos: [], code, master }
+const sessions = new Map(); // id -> { dir, photos: [], code, kind: guest|master|staff }
 
 /**
  * Check afterwards whether a photo actually got light.
@@ -87,6 +88,7 @@ async function logIfDark(file, index) {
     if (mean < DARK_THRESHOLD) {
       console.warn(`[flash] WARNING: photo ${index + 1} is nearly black (brightness ${mean.toFixed(1)}/255) ` +
         `- the flash did not fire. Check the sync cable and its plugs.`);
+      events.log("photo_dark", { photo: index + 1, brightness: Math.round(mean * 10) / 10 });
     }
   } catch (e) { /* diagnostics must never break a session */ }
 }
@@ -158,14 +160,19 @@ app.post("/api/validate", (req, res) => {
   const result = codes.validateAndRedeem(code);
 
   if (!result.valid) {
-    const status = result.reason === "already_used" ? "used" : "invalid";
-    return res.json({ status });
+    const status = result.reason === "already_used" ? "used"
+                 : result.reason === "staff_limit"  ? "staff_limit"
+                 : "invalid";
+    events.log("code_rejected", { result: status });
+    return res.json({ status, quota: result.quota });
   }
 
   const id = crypto.randomUUID();
   const dir = path.join(config.paths.sessions, id);
   fs.mkdirSync(dir, { recursive: true });
-  sessions.set(id, { dir, photos: [], code, master: !!result.master });
+  const kind = result.kind || "guest";
+  sessions.set(id, { dir, photos: [], code, kind, startedAt: Date.now() });
+  events.log("session_started", { sessionId: id, kind });
   res.json({ status: "ok", sessionId: id });
 });
 
@@ -181,7 +188,9 @@ app.post("/api/capture", async (req, res) => {
     res.json({ ok: true, url: `/sessions/${sessionId}/${path.basename(file)}` });
     setImmediate(() => logIfDark(file, idx));   // after the response, never blocks
   } catch (e) {
-    console.error("[capture] FAILED:", e); res.status(500).json({ error: e.message });
+    console.error("[capture] FAILED:", e);
+    events.log("capture_failed", { sessionId, photo: (Number(index) || 0) + 1, error: e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -194,17 +203,29 @@ app.post("/api/print", async (req, res) => {
   const missing = [];
   for (let i = 0; i < config.photos; i++) if (!s.photos[i]) missing.push(i + 1);
   if (missing.length) {
+    events.log("print_failed", { sessionId, kind: s.kind, error: `missing photo(s): ${missing.join(", ")}` });
     return res.status(500).json({ error: `missing photo(s): ${missing.join(", ")}` });
   }
 
   try {
-    const out = path.join(config.paths.prints, `${sessionId}.png`);
+    // Staff and master strips are prefixed so the statistics can tell real
+    // guest business from testing. They still consume paper and ribbon, so
+    // they count towards media -- just not towards revenue.
+    const prefix = s.kind === "guest" ? "" : "staff-";
+    const out = path.join(config.paths.prints, `${prefix}${sessionId}.png`);
     await buildStrip(s.photos, out);
     const printResult = await printStrip(out);
+    events.log("print_ok", {
+      sessionId, kind: s.kind,
+      seconds: Math.round((Date.now() - s.startedAt) / 1000),
+      printed: !!printResult.printed,
+    });
     sessions.delete(sessionId);                       // done -- free the session
-    res.json({ ok: true, stripUrl: `/prints/${sessionId}.png`, print: printResult });
+    res.json({ ok: true, stripUrl: `/prints/${prefix}${sessionId}.png`, print: printResult });
   } catch (e) {
-    console.error("[print] FAILED:", e); res.status(500).json({ error: e.message });
+    console.error("[print] FAILED:", e);
+    events.log("print_failed", { sessionId, kind: s.kind, error: e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -215,8 +236,9 @@ app.post("/api/release", (req, res) => {
   const s = sessions.get(sessionId);
   if (!s) return res.json({ ok: true, released: false });
   sessions.delete(sessionId);
-  const released = s.master ? false : codes.release(s.code).released;
-  console.log(`[release] session ${sessionId} -> code ${s.code}${released ? " released" : " (not released)"}`);
+  const released = codes.release(s.code).released;   // master: no, staff: refunds the daily use
+  console.log(`[release] session ${sessionId} (${s.kind}) -> code ${s.code}${released ? " released" : " (not released)"}`);
+  events.log("session_released", { sessionId, kind: s.kind, released });
   res.json({ ok: true, released });
 });
 
@@ -240,6 +262,7 @@ app.post("/admin/generate", requireLogin, (req, res) => {
   const count = Math.max(1, Math.min(5000, parseInt(req.body && req.body.count, 10) || 0));
   try {
     const r = codes.generateBatch(count);
+    events.log("batch_generated", { batch: r.batch, added: r.added, total: r.total });
     res.redirect("/admin?msg=" + encodeURIComponent(
       `generated ${r.added} new codes as batch ${r.batch} - download the CSV to print them (${r.total} codes in total now)`));
   } catch (e) {
@@ -252,30 +275,39 @@ app.post("/admin/generate", requireLogin, (req, res) => {
 app.post("/admin/release", requireLogin, (req, res) => {
   const code = (req.body && req.body.code || "").toString();
   const r = codes.release(code);
+  events.log("code_released_by_staff", { code, released: r.released, reason: r.reason || null });
   const msg = r.released ? `code ${code} released -- it can be used again` : `code ${code} NOT released (${r.reason})`;
   res.redirect("/admin?msg=" + encodeURIComponent(msg));
 });
 
 // staff: print a test strip from assets/test-photos -- checks strip build +
 // hot folder + printer without touching the camera or burning a code
+async function runTestPrint() {
+  let pool = [];
+  try {
+    pool = fs.readdirSync(config.paths.testPhotos)
+      .filter(f => /\.(jpe?g|png)$/i.test(f))
+      .map(f => path.join(config.paths.testPhotos, f))
+      .sort();
+  } catch (e) {}
+  if (!pool.length) throw new Error("no test photos in assets/test-photos");
+  const photos = [0, 1, 2].map(i => pool[i % pool.length]);
+  const out = path.join(config.paths.prints, `test-${Date.now()}.png`);
+  await buildStrip(photos, out);
+  const r = await printStrip(out);
+  return { ...r, file: path.basename(out) };
+}
+
 app.post("/admin/testprint", requireLogin, async (req, res) => {
   try {
-    let pool = [];
-    try {
-      pool = fs.readdirSync(config.paths.testPhotos)
-        .filter(f => /\.(jpe?g|png)$/i.test(f))
-        .map(f => path.join(config.paths.testPhotos, f))
-        .sort();
-    } catch (e) {}
-    if (!pool.length) throw new Error("no test photos in assets/test-photos");
-    const photos = [0, 1, 2].map(i => pool[i % pool.length]);
-    const out = path.join(config.paths.prints, `test-${Date.now()}.png`);
-    await buildStrip(photos, out);
-    const r = await printStrip(out);
+    const r = await runTestPrint();
+    const out = r.file;
+    events.log("test_print", { ok: true, printed: !!r.printed });
     res.redirect("/admin?msg=" + encodeURIComponent(
-      r.printed ? `test strip sent to printer (${path.basename(out)})` : `test strip built, TEST mode -- nothing printed (${path.basename(out)})`));
+      r.printed ? `test strip sent to printer (${out})` : `test strip built, TEST mode -- nothing printed (${out})`));
   } catch (e) {
     console.error("[testprint] FAILED:", e);
+    events.log("test_print", { ok: false, error: e.message });
     res.redirect("/admin?msg=" + encodeURIComponent("TEST PRINT FAILED: " + e.message));
   }
 });
@@ -288,12 +320,13 @@ app.get("/admin", requireLogin, (req, res) => {
     testMode: config.TEST_MODE,
     host: config.HOST,
     port: config.PORT,
-    masterCode: codes.MASTER_CODE,
+    special: codes.specialCodes(),
   }));
 });
 
 app.listen(config.PORT, config.HOST, () => {
   const s = codes.stats();
+  events.log("booth_started", { testMode: config.TEST_MODE, codesLeft: s.remaining });
   console.log("──────────────────────────────────────────────");
   console.log("  fr-anz photobooth running");
   console.log(`  → open  http://localhost:${config.PORT}`);
@@ -301,4 +334,5 @@ app.listen(config.PORT, config.HOST, () => {
   console.log(`  mode    ${config.TEST_MODE ? "TEST (no hardware)" : "LIVE (camera + printer)"}`);
   console.log(`  codes   ${s.total} total · ${s.used} used · ${s.remaining} left`);
   console.log("──────────────────────────────────────────────");
+
 });
