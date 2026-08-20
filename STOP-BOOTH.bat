@@ -11,6 +11,13 @@ echo.
 echo   stopping the photobooth...
 echo.
 
+REM 0) tell the cloud dashboard this is a deliberate stop, not a crash.
+REM    Must happen BEFORE the kills: Stop-Process gives node no chance
+REM    to say anything, so without this every closing time looks like
+REM    the PC dying and sets off the offline alarm.
+REM    Does nothing if the dashboard is not configured. Gives up after 6s.
+node "%~dp0scripts\booth-offline.js" stop-booth >nul 2>&1
+
 REM 1) close the watchdog window first, so the server is not restarted
 taskkill /f /fi "WINDOWTITLE eq fr-anz server*" >nul 2>&1
 

@@ -1,0 +1,7 @@
+{
+  "_comment": "Copy to data/cloud.json on the booth PC and fill in. data/ is gitignored, so the key never travels through GitHub.",
+  "url": "https://<your-project>.supabase.co/functions/v1/booth-report",
+  "boothKey": "<the booth key from the dashboard, Settings > Booth>",
+  "boothSlug": "fr-anz",
+  "intervalSeconds": 30
+}

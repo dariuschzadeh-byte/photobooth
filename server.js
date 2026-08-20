@@ -22,6 +22,7 @@ const config = require("./config");
 const codes = require("./src/codes");
 const stats = require("./src/stats");
 const events = require("./src/events");
+const reporter = require("./src/reporter");
 const adminPage = require("./src/admin");
 const auth = require("./src/auth");
 const camera = require("./src/camera");
@@ -335,4 +336,40 @@ app.listen(config.PORT, config.HOST, () => {
   console.log(`  codes   ${s.total} total · ${s.used} used · ${s.remaining} left`);
   console.log("──────────────────────────────────────────────");
 
+  /* The complete list of things the cloud dashboard may do to this booth.
+     Anything not named here is refused, so widening the dashboard's reach
+     is always a deliberate edit to this file -- never a change made from
+     the browser.
+
+     On repeats: a command whose receipt is lost is NOT re-issued -- the
+     cloud expires it after five minutes instead. That rule exists because
+     generate_codes cannot be repeated safely; running it again mints a
+     second batch of real vouchers. An outcome someone has to check by hand
+     beats silently doubling the voucher stock. */
+  reporter.start({
+    generate_codes: ({ count }) => {
+      const n = Math.max(1, Math.min(5000, parseInt(count, 10) || 0));
+      const r = codes.generateBatch(n);
+      events.log("batch_generated", { batch: r.batch, added: r.added, total: r.total, via: "dashboard" });
+      return r;
+    },
+    release_code: ({ code }) => {
+      const r = codes.release(String(code || ""));
+      events.log("code_released_by_staff", { code, released: r.released, reason: r.reason || null, via: "dashboard" });
+      return r;
+    },
+    test_print: async () => {
+      const r = await runTestPrint();
+      events.log("test_print", { ok: true, printed: !!r.printed, via: "dashboard" });
+      return r;
+    },
+    restart_server: () => {
+      // Exiting is the restart: _server-loop.bat brings the server straight
+      // back up. Delayed so this command's receipt reaches the dashboard
+      // first -- otherwise it looks like the restart failed.
+      events.log("restart_requested", { via: "dashboard" });
+      setTimeout(() => process.exit(1), 2500);
+      return { restarting: true };
+    },
+  });
 });
