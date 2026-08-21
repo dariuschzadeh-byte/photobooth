@@ -94,20 +94,25 @@ module.exports = {
     // highlightRolloff  bends over instead of hitting 255 flat. Cannot
     //                   recover a highlight the camera already clipped.
     tone: {
+      // Neutral, so the grade above is exactly what it was. This is the one
+      // dial to reach for if the camera is running hot: 0.95 is about a
+      // twentieth of a stop down, 0.85 clearly darker. It changes only
+      // brightness and never colour, so the look stays put.
       enabled: true,
       exposure: 1.00,
       highlightKnee: 0.72,
-      highlightRolloff: 0.45,
+      highlightRolloff: 0,
     },
 
     // Clean grade -- SOFT (less contrast, gentle sharpen)
     grade: {
-      // OFF: no colour correction at all -- no gains, no saturation
-      // change, no contrast, no sharpening. The plain look the booth
-      // printed until June. Turned off at the owner's request after the
-      // grade was found to bleach bright pink towards white.
-      // scripts/compare-look.js renders both without using any paper.
-      enabled: false,
+      // ON. It was briefly switched off on the assumption that the grade
+      // was what made recent prints look wrong. It was not: the strip the
+      // owner points to as correct was printed WITH this on, and without
+      // it the prints look unprocessed rather than better. Restored to
+      // exactly the values that produced those prints -- see commit
+      // 76fff51. scripts/compare-look.js shows both without using paper.
+      enabled: true,
       // These gains are deliberately UNEQUAL -- they cancel a red cast coming
       // from the camera, measured against the white t-shirt (R244 G174 B166).
       // Only valid while the camera's white balance is set to FLASH. If the
@@ -135,7 +140,11 @@ module.exports = {
       // None of this recovers a clipped highlight -- if the camera wrote
       // 255 there is nothing underneath. Fix the flash or the exposure
       // for that. This only stops the software making it worse.
-      gainFalloff: 2.2,
+      // 0 = the gains apply at full strength everywhere, which is how the
+      // good prints were made. Raising it fades the colour correction out
+      // towards white and stops bright pink collapsing to blue-white -- use
+      // it only if that patch comes back, and change one thing at a time.
+      gainFalloff: 0,
       sat: 0.94,              // lower = softer pastel (was 0.97)
 
       // Fraction of the full range added to the darkest areas. This stood
@@ -157,9 +166,11 @@ module.exports = {
     // shows above people's heads, while everything around it is dimmed by
     // up to `strength`. A reflection landing there is made more prominent,
     // not less. That is exactly why it is off: it was making the glare
-    // on the backdrop stand out rather than settle down.
+    // on the backdrop stand out. Left ON regardless: the prints the owner
+    // wants back were made with it, and switching it off made them look
+    // flat rather than clean.
     backdrop: {
-      enabled: false,
+      enabled: true,
       strength: 0.18,         // lower = lighter, more even background (was 0.20)
       satBoost: 0.0,
       headBias: 0.42,
