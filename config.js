@@ -95,6 +95,31 @@ module.exports = {
       // camera WB ever changes, re-measure instead of tweaking blindly:
       // a neutral 1.10/1.10/1.10 would bring the red cast straight back.
       rGain: 1.00, gGain: 1.10, bGain: 1.13,
+
+      // ---- highlight control -------------------------------------
+      // Added after prints came out overexposed, with the backdrop
+      // washing to white and a cool blue cast in the brightest areas.
+      //
+      // exposure     pulls the whole frame down before anything else.
+      //              1.00 = untouched. Every 0.05 is about half a stop
+      //              of headroom back.
+      // highlightKnee / highlightRolloff
+      //              above `knee` (as a fraction of full white) the
+      //              response bends over instead of hitting 255 flat.
+      //              rolloff 0 = off, 1 = very soft.
+      // gainFalloff  fades the rGain/gGain/bGain correction out towards
+      //              white. 0 = always full (the old behaviour, which is
+      //              what turned bright pink into blue-white). Higher =
+      //              the correction stays in the midtones where it was
+      //              measured. 2 is gentle, 4 is strict.
+      //
+      // None of this recovers a clipped highlight -- if the camera wrote
+      // 255 there is nothing underneath. Fix the flash or the exposure
+      // for that. This only stops the software making it worse.
+      exposure: 0.93,
+      highlightKnee: 0.70,
+      highlightRolloff: 0.55,
+      gainFalloff: 2.2,
       sat: 0.94,              // lower = softer pastel (was 0.97)
 
       // Fraction of the full range added to the darkest areas. This stood

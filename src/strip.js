@@ -22,13 +22,61 @@ const H       = S.heightInch * DPI;  // 1800
 function rgba(a){ return Jimp.rgbaToInt(a[0], a[1], a[2], 255); }
 function clamp(v){ return v < 0 ? 0 : v > 255 ? 255 : v; }
 
+/**
+ * Soft shoulder instead of a brick wall.
+ *
+ * Above `knee` the response bends over towards 255 rather than running
+ * into it, so a bright area keeps some separation instead of turning into
+ * one flat patch of white. It cannot invent detail that the camera never
+ * recorded -- once a channel came out of the sensor at 255 there is
+ * nothing left to recover -- but it stops the grade from pushing more of
+ * the frame into that state.
+ */
+function shoulder(v, knee, strength){
+  if (strength <= 0) return v;
+  const k = knee * 255;
+  if (v <= k) return v;
+  const range = 255 - k;
+  const over = (v - k) / range;
+  return k + range * (1 - Math.pow(1 - Math.min(1, over), 1 + strength * 3));
+}
+
 /* ---- clean flash grade: colour + saturation + shadow lift + contrast + unsharp ---- */
 function flashGrade(img){
   const g = S.grade;
   if (g.enabled === false) return img;
+
+  const exposure = g.exposure == null ? 1 : g.exposure;
+  const knee = g.highlightKnee == null ? 1 : g.highlightKnee;
+  const shoulderAmt = g.highlightRolloff == null ? 0 : g.highlightRolloff;
+  const gainFalloff = g.gainFalloff == null ? 0 : g.gainFalloff;
+
   img.scan(0,0,img.bitmap.width,img.bitmap.height,function(x,y,idx){
     let r=this.bitmap.data[idx], gr=this.bitmap.data[idx+1], b=this.bitmap.data[idx+2];
-    r*=g.rGain; gr*=g.gGain; b*=g.bGain;
+
+    // 1) overall exposure, before anything else looks at brightness
+    if (exposure !== 1){ r*=exposure; gr*=exposure; b*=exposure; }
+
+    // 2) bend the top end over instead of letting it pile up on 255
+    r=shoulder(r,knee,shoulderAmt); gr=shoulder(gr,knee,shoulderAmt); b=shoulder(b,knee,shoulderAmt);
+
+    /* 3) The colour correction, but weakened as the pixel gets bright.
+     *
+     * The gains are unequal by design -- they cancel a red cast measured
+     * against a white t-shirt. That works in the midtones and backfires in
+     * the highlights, and the reason is arithmetic: pink has red as its
+     * highest channel, so red hits 255 first and stops, while green and
+     * blue still have headroom AND get multiplied up. The brighter the
+     * area, the more they catch up, until the pink is gone and what is
+     * left reads white or faintly blue. Measured on the backdrop colour:
+     * R-B falls from 60 at normal exposure to 0 at 1.45x.
+     *
+     * Fading the gains out towards white keeps the correction where it was
+     * measured and takes it out of the range where it does damage.
+     */
+    const lum0 = (0.299*r + 0.587*gr + 0.114*b) / 255;
+    const w = gainFalloff > 0 ? 1 - Math.pow(Math.min(1, Math.max(0, lum0)), gainFalloff) : 1;
+    r*=1+(g.rGain-1)*w; gr*=1+(g.gGain-1)*w; b*=1+(g.bGain-1)*w;
     r=clamp(r); gr=clamp(gr); b=clamp(b);
     let lum=0.299*r+0.587*gr+0.114*b;
     r=lum+(r-lum)*g.sat; gr=lum+(gr-lum)*g.sat; b=lum+(b-lum)*g.sat;

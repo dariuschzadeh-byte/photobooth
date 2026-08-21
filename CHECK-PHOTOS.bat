@@ -36,12 +36,16 @@ if not defined NEWEST (
 echo   newest session: %NEWEST%
 echo.
 
-echo   [1/2] what the pipeline does to the photos...
+echo   [1/3] what changed on the camera since the booth was set up...
+node "scripts\camera-settings.js"
+echo.
+
+echo   [2/3] what the pipeline does to the photos...
 node "scripts\analyse-photo.js" "output\sessions\%NEWEST%"
 if errorlevel 1 goto failed
 
 echo.
-echo   [2/2] the three looks side by side...
+echo   [3/3] the three looks side by side...
 node "scripts\compare-look.js" "output\sessions\%NEWEST%"
 if errorlevel 1 goto failed
 
