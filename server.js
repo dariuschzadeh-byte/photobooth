@@ -22,6 +22,7 @@ const config = require("./config");
 const codes = require("./src/codes");
 const stats = require("./src/stats");
 const events = require("./src/events");
+const exifTool = require("./src/exif");
 const reporter = require("./src/reporter");
 const adminPage = require("./src/admin");
 const auth = require("./src/auth");
@@ -72,26 +73,78 @@ const sessions = new Map(); // id -> { dir, photos: [], code, kind: guest|master
  * way to spot a flaky sync cable from a distance.
  * Runs after the response has been sent so it never slows the countdown.
  */
-const DARK_THRESHOLD = 30;
-async function logIfDark(file, index) {
-  try {
-    const img = await Jimp.read(file);
-    const { width: w, height: h, data } = img.bitmap;
-    let sum = 0, n = 0;
-    for (let y = 0; y < h; y += 12) {
-      for (let x = 0; x < w; x += 12) {
-        const i = (y * w + x) * 4;
-        sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        n++;
+/**
+ * Mean brightness of a frame, 0-255, or null if it cannot be read.
+ *
+ * Reads the EXIF thumbnail when the camera embedded one. That is the whole
+ * reason this is quick enough to run inside a session: decoding a 6MB
+ * 5184x3456 frame costs seconds on the booth PC, the thumbnail about 20ms,
+ * and a frame the flash never lit is dark at either size.
+ */
+async function frameBrightness(file) {
+  for (const source of [exifTool.thumbnail(file), file]) {
+    if (!source) continue;
+    try {
+      const img = await Jimp.read(source);
+      const { width: w, height: h, data } = img.bitmap;
+      const step = Math.max(1, Math.floor(Math.min(w, h) / 60));
+      let sum = 0, n = 0;
+      for (let y = 0; y < h; y += step) {
+        for (let x = 0; x < w; x += step) {
+          const i = (y * w + x) * 4;
+          sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+          n++;
+        }
       }
-    }
-    const mean = sum / n;
-    if (mean < DARK_THRESHOLD) {
-      console.warn(`[flash] WARNING: photo ${index + 1} is nearly black (brightness ${mean.toFixed(1)}/255) ` +
-        `- the flash did not fire. Check the sync cable and its plugs.`);
-      events.log("photo_dark", { photo: index + 1, brightness: Math.round(mean * 10) / 10 });
-    }
-  } catch (e) { /* diagnostics must never break a session */ }
+      if (n) return sum / n;
+    } catch (e) { /* try the next source */ }
+  }
+  return null;
+}
+
+/**
+ * Take one photo, and take it again if the flash did not fire.
+ *
+ * A misfiring flash produces a near-black frame -- measured around 5 of
+ * 255, against roughly 170 when it fires. The booth used to print it
+ * anyway and merely note it in the log, on the reasoning that a guest
+ * should not leave empty-handed. But a black frame is not a photo, and
+ * waiting a few seconds for the flash to charge and pressing the shutter
+ * again costs far less than a ruined strip.
+ *
+ * It still never gives up entirely: if every attempt comes back dark, the
+ * last one is used and the session continues. Empty-handed is still worse.
+ */
+async function captureChecked(sessionDir, index) {
+  const cfg = (config.camera && config.camera.flashRetry) || {};
+  const threshold = cfg.darkThreshold == null ? 30 : cfg.darkThreshold;
+  const extra = cfg.enabled === false ? 0 : (cfg.attempts == null ? 1 : cfg.attempts);
+  const wait = cfg.waitMs == null ? 4500 : cfg.waitMs;
+
+  let file = await camera.capture(sessionDir, index);
+  let mean = await frameBrightness(file);
+
+  for (let attempt = 1; attempt <= extra; attempt++) {
+    if (mean === null || mean >= threshold) break;
+
+    console.warn(`[flash] photo ${index + 1} came back nearly black (brightness ${mean.toFixed(1)}/255) ` +
+      `- the flash did not fire. Waiting ${wait}ms and taking it again.`);
+    events.log("photo_dark", { photo: index + 1, brightness: Math.round(mean * 10) / 10, attempt, retrying: true });
+
+    // digiCamControl will not overwrite reliably, so clear the bad frame.
+    try { fs.rmSync(file, { force: true }); } catch (e) {}
+    await new Promise(r => setTimeout(r, wait));
+
+    file = await camera.capture(sessionDir, index);
+    mean = await frameBrightness(file);
+  }
+
+  if (mean !== null && mean < threshold) {
+    console.warn(`[flash] photo ${index + 1} is STILL nearly black after ${extra} retry(ies). ` +
+      `Printing it anyway. Check the flash: batteries, sync cable, and both its plugs.`);
+    events.log("photo_dark", { photo: index + 1, brightness: Math.round(mean * 10) / 10, gaveUp: true });
+  }
+  return { file, brightness: mean };
 }
 
 /* ---------- control centre login ------------------------------------ */
@@ -184,10 +237,9 @@ app.post("/api/capture", async (req, res) => {
   if (!s) return res.status(400).json({ error: "unknown session" });
   try {
     const idx = Number(index) || 0;
-    const file = await camera.capture(s.dir, idx);
+    const { file } = await captureChecked(s.dir, idx);
     s.photos[idx] = file;
     res.json({ ok: true, url: `/sessions/${sessionId}/${path.basename(file)}` });
-    setImmediate(() => logIfDark(file, idx));   // after the response, never blocks
   } catch (e) {
     console.error("[capture] FAILED:", e);
     events.log("capture_failed", { sessionId, photo: (Number(index) || 0) + 1, error: e.message });

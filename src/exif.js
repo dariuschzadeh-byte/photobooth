@@ -76,6 +76,69 @@ function readIFD(buf, tiff, ifdOff, le, out) {
   }
 }
 
+/** Locate the TIFF header inside a JPEG's APP1 segment. */
+function tiffStart(buf) {
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return -1;
+  let p = 2;
+  while (p + 4 < buf.length) {
+    if (buf[p] !== 0xff) break;
+    const marker = buf[p + 1];
+    const len = buf.readUInt16BE(p + 2);
+    if (marker === 0xe1 && buf.toString("ascii", p + 4, p + 10) === "Exif\0\0") return p + 10;
+    if (marker === 0xda) break;
+    p += 2 + len;
+  }
+  return -1;
+}
+
+/**
+ * The small preview the camera embeds in every JPEG.
+ *
+ * Worth the extra parsing: deciding whether the flash fired means looking
+ * at the picture, and decoding a 6 MB 5184x3456 frame costs seconds on the
+ * booth PC -- seconds a guest would spend staring at a frozen screen. The
+ * thumbnail is a few kilobytes and answers the same question, because a
+ * frame the flash never lit is dark at every size.
+ *
+ * Returns a JPEG Buffer, or null when the file has no thumbnail.
+ */
+function thumbnail(file) {
+  let buf;
+  try { buf = fs.readFileSync(file); } catch (e) { return null; }
+  const tiff = tiffStart(buf);
+  if (tiff < 0 || tiff + 8 > buf.length) return null;
+
+  const le = buf.toString("ascii", tiff, tiff + 2) === "II";
+  const u16 = o => (le ? buf.readUInt16LE(o) : buf.readUInt16BE(o));
+  const u32 = o => (le ? buf.readUInt32LE(o) : buf.readUInt32BE(o));
+
+  const ifd0 = u32(tiff + 4);
+  if (tiff + ifd0 + 2 > buf.length) return null;
+  const n0 = u16(tiff + ifd0);
+  const nextPtr = tiff + ifd0 + 2 + n0 * 12;
+  if (nextPtr + 4 > buf.length) return null;
+
+  const ifd1 = u32(nextPtr);                 // the thumbnail directory
+  if (!ifd1 || tiff + ifd1 + 2 > buf.length) return null;
+
+  let off = 0, len = 0;
+  const n1 = u16(tiff + ifd1);
+  for (let i = 0; i < n1; i++) {
+    const e = tiff + ifd1 + 2 + i * 12;
+    if (e + 12 > buf.length) return null;
+    const tag = u16(e);
+    if (tag === 0x0201) off = u32(e + 8);
+    else if (tag === 0x0202) len = u32(e + 8);
+  }
+  if (!off || !len) return null;
+
+  const start = tiff + off;
+  if (start + len > buf.length) return null;
+  const thumb = buf.subarray(start, start + len);
+  // Must still look like a JPEG, or Jimp will throw on it.
+  return (thumb[0] === 0xff && thumb[1] === 0xd8) ? thumb : null;
+}
+
 /** The exposure-relevant tags, or null if the file carries no EXIF. */
 function read(file) {
   let buf;
@@ -122,4 +185,4 @@ function describe(file) {
   };
 }
 
-module.exports = { read, describe };
+module.exports = { read, describe, thumbnail };

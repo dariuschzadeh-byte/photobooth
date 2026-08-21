@@ -155,6 +155,19 @@ module.exports = {
 
   camera: {
     cmdPath: "C:\\Program Files (x86)\\digiCamControl\\CameraControlCmd.exe",
+
+    // In manual mode the camera fires whether or not the flash has
+    // recharged, so a frame occasionally comes back unlit -- and the guest
+    // takes it home like that. The booth now looks at each photo straight
+    // after taking it and, if it is nearly black, waits and takes that one
+    // again. Checked on the EXIF thumbnail, which costs about 20ms rather
+    // than the seconds a full 6MB frame would.
+    flashRetry: {
+      enabled: true,
+      darkThreshold: 30,   // mean brightness 0-255. Lit frames measure ~170.
+      waitMs: 4500,        // time for the flash to charge before retrying
+      attempts: 1,         // extra tries beyond the first
+    },
     // 20s, not 12s: the camera shoots large JPEGs (L) now, ~6 MB each.
     // Transferring those over USB takes noticeably longer than the old 0.5 MB files.
     captureTimeoutMs: 20000,
