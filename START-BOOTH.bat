@@ -116,6 +116,24 @@ if not exist "%HFP%" (
 )
 tasklist /fi "IMAGENAME eq HotFolderPrint.exe" 2>nul | find /i "HotFolderPrint.exe" >nul
 if not errorlevel 1 exit /b 0
+REM  Anything already sitting in the hot folder was queued while Hot Folder
+REM  Print was NOT running, so it never printed. Starting HFP over that
+REM  backlog makes it print all of it at once, on top of whatever the next
+REM  guest does -- a stack of strips nobody asked for. Park it instead, so
+REM  it can be looked at rather than fed to the printer.
+set "HFDIR=C:\DNP\HotFolderPrint\Prints\s6x2_2"
+set "PARKED=%~dp0output\unprinted"
+if exist "%HFDIR%" (
+  dir /b "%HFDIR%\*.png" "%HFDIR%\*.jpg" >nul 2>&1
+  if not errorlevel 1 (
+    if not exist "%PARKED%" mkdir "%PARKED%" >nul 2>&1
+    echo   strips were still waiting in the printer folder from earlier.
+    echo   moving them to output\unprinted so they do NOT all print at once.
+    move /y "%HFDIR%\*.png" "%PARKED%\" >nul 2>&1
+    move /y "%HFDIR%\*.jpg" "%PARKED%\" >nul 2>&1
+  )
+)
+
 echo   starting the printer software...
 start "" "%HFP%"
 exit /b 0

@@ -131,12 +131,34 @@ async function captureChecked(sessionDir, index) {
       `- the flash did not fire. Waiting ${wait}ms and taking it again.`);
     events.log("photo_dark", { photo: index + 1, brightness: Math.round(mean * 10) / 10, attempt, retrying: true });
 
-    // digiCamControl will not overwrite reliably, so clear the bad frame.
-    try { fs.rmSync(file, { force: true }); } catch (e) {}
+    /* Move the dark frame aside rather than delete it. digiCamControl will
+     * not reliably overwrite an existing file, so the path has to be free
+     * -- but throwing the frame away first means a retry that fails, or
+     * comes back even darker, leaves the guest with nothing at all. A bad
+     * photo still beats a lost session. */
+    const parked = file + ".attempt" + attempt;
+    try { fs.renameSync(file, parked); } catch (e) { /* keep going either way */ }
+
     await new Promise(r => setTimeout(r, wait));
 
-    file = await camera.capture(sessionDir, index);
-    mean = await frameBrightness(file);
+    let retryFile = null, retryMean = null;
+    try {
+      retryFile = await camera.capture(sessionDir, index);
+      retryMean = await frameBrightness(retryFile);
+    } catch (e) {
+      console.warn(`[flash] the retry itself failed (${e.message}) - keeping the first frame.`);
+      events.log("capture_retry_failed", { photo: index + 1, error: e.message });
+    }
+
+    // Keep whichever frame is brighter; put it back under the real name.
+    const keepRetry = retryFile && (retryMean === null || mean === null || retryMean >= mean);
+    if (keepRetry) {
+      file = retryFile; mean = retryMean;
+      try { fs.rmSync(parked, { force: true }); } catch (e) {}
+    } else {
+      try { if (retryFile) fs.rmSync(retryFile, { force: true }); } catch (e) {}
+      try { fs.renameSync(parked, file); } catch (e) {}
+    }
   }
 
   if (mean !== null && mean < threshold) {

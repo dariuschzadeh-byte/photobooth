@@ -372,9 +372,19 @@ const CONFIG = {
   countdownStepMs: 1000,
   cueMs:           1100,
   flashMs:         280,
-  afterCaptureMs:  2000,      // pause after each shot so the flash recharges
-                              // fully -- measured: at ~7s between shots the
-                              // 5th flash already came back weaker (144 vs 172)
+  afterCaptureMs:  4600,      /* Pause after each shot so the flash recharges.
+                                 Measured earlier: at ~7s between shots the 5th
+                                 flash already came back weaker (144 vs 172).
+
+                                 Raised from 2000 because the countdown was cut
+                                 from 10s to 5s at some point and this did not
+                                 make up for it -- flash to flash had quietly
+                                 dropped from 12.0s in June to 8.4s, i.e. 3.6s
+                                 LESS recovery than the build that measurement
+                                 was taken on. Back to 11.0s now. The wait sits
+                                 under "hold still", where the guest is already
+                                 waiting for the transfer, rather than in a
+                                 ten-second countdown nobody enjoys. */
   successBeatMs:   800,
   thanksMs:        2800,
   printMs:         4600,
