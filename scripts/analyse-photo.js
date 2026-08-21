@@ -25,12 +25,25 @@ const Jimp = require("jimp");
 const config = require("../config");
 const { flashGrade, backdropGradient } = require("../src/strip");
 
-const files = process.argv.slice(2).filter(a => !a.startsWith("--"));
-if (!files.length) {
-  console.error("Usage: node scripts/analyse-photo.js <photo.jpg> [more.jpg ...]");
+const args = process.argv.slice(2).filter(a => !a.startsWith("--"));
+if (!args.length) {
+  console.error("Usage: node scripts/analyse-photo.js <photo.jpg | session-folder>");
   console.error("Tip:   the newest session is the last folder in output/sessions/");
   process.exit(1);
 }
+
+/** A whole session folder is the normal case -- accept it as well as files. */
+const files = args.flatMap(a => {
+  try {
+    if (fs.statSync(a).isDirectory()) {
+      return fs.readdirSync(a)
+        .filter(f => /\.(jpe?g|png)$/i.test(f))
+        .sort()
+        .map(f => path.join(a, f));
+    }
+  } catch (e) { /* fall through: report it as missing below */ }
+  return [a];
+});
 
 const OUT = path.join(config.paths.output, "analysis");
 fs.mkdirSync(OUT, { recursive: true });
