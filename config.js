@@ -82,13 +82,32 @@ module.exports = {
     logoWidthRatio: 0.46,
     logoHeightRatio: 0.78,
 
+    // ---- brightness ----------------------------------------------
+    // Separate from the grade on purpose. Switching the colour grading
+    // off to get the plain look must not also remove the only brake on a
+    // camera that is overexposing -- those are two different questions.
+    //
+    // exposure          1.00 = untouched. 0.93 is roughly a tenth of a
+    //                   stop down. Lower this only if prints are too
+    //                   bright AND the camera cannot be fixed.
+    // highlightKnee /   above `knee` (as a fraction of white) the response
+    // highlightRolloff  bends over instead of hitting 255 flat. Cannot
+    //                   recover a highlight the camera already clipped.
+    tone: {
+      enabled: true,
+      exposure: 1.00,
+      highlightKnee: 0.72,
+      highlightRolloff: 0.45,
+    },
+
     // Clean grade -- SOFT (less contrast, gentle sharpen)
     grade: {
-      // Set to false to print the camera JPEG untouched, the way the booth
-      // did until June. Use it to settle "is this the camera or the
-      // software?" -- scripts/compare-look.js renders both without using
-      // any paper.
-      enabled: true,
+      // OFF: no colour correction at all -- no gains, no saturation
+      // change, no contrast, no sharpening. The plain look the booth
+      // printed until June. Turned off at the owner's request after the
+      // grade was found to bleach bright pink towards white.
+      // scripts/compare-look.js renders both without using any paper.
+      enabled: false,
       // These gains are deliberately UNEQUAL -- they cancel a red cast coming
       // from the camera, measured against the white t-shirt (R244 G174 B166).
       // Only valid while the camera's white balance is set to FLASH. If the
@@ -116,9 +135,6 @@ module.exports = {
       // None of this recovers a clipped highlight -- if the camera wrote
       // 255 there is nothing underneath. Fix the flash or the exposure
       // for that. This only stops the software making it worse.
-      exposure: 0.93,
-      highlightKnee: 0.70,
-      highlightRolloff: 0.55,
       gainFalloff: 2.2,
       sat: 0.94,              // lower = softer pastel (was 0.97)
 
@@ -140,9 +156,10 @@ module.exports = {
     // spot it protects sits at headBias, i.e. right where the backdrop
     // shows above people's heads, while everything around it is dimmed by
     // up to `strength`. A reflection landing there is made more prominent,
-    // not less. Set enabled:false to take it out of the picture entirely.
+    // not less. That is exactly why it is off: it was making the glare
+    // on the backdrop stand out rather than settle down.
     backdrop: {
-      enabled: true,
+      enabled: false,
       strength: 0.18,         // lower = lighter, more even background (was 0.20)
       satBoost: 0.0,
       headBias: 0.42,

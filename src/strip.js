@@ -41,26 +41,44 @@ function shoulder(v, knee, strength){
   return k + range * (1 - Math.pow(1 - Math.min(1, over), 1 + strength * 3));
 }
 
+/**
+ * Brightness only: overall exposure and a soft top end.
+ *
+ * Deliberately NOT part of flashGrade. Exposure is not colour grading, and
+ * bundling them meant that turning the grade off -- to get the plain look
+ * the booth printed until June -- also silently removed the one thing
+ * holding back a camera that is overexposing. Two questions, two switches.
+ */
+function toneStage(img){
+  const t = S.tone || {};
+  if (t.enabled === false) return img;
+
+  const exposure = t.exposure == null ? 1 : t.exposure;
+  const knee = t.highlightKnee == null ? 1 : t.highlightKnee;
+  const shoulderAmt = t.highlightRolloff == null ? 0 : t.highlightRolloff;
+  if (exposure === 1 && shoulderAmt <= 0) return img;   // nothing to do
+
+  img.scan(0,0,img.bitmap.width,img.bitmap.height,function(x,y,idx){
+    for(let c=0;c<3;c++){
+      let v=this.bitmap.data[idx+c];
+      if (exposure !== 1) v*=exposure;
+      this.bitmap.data[idx+c]=clamp(shoulder(v,knee,shoulderAmt));
+    }
+  });
+  return img;
+}
+
 /* ---- clean flash grade: colour + saturation + shadow lift + contrast + unsharp ---- */
 function flashGrade(img){
   const g = S.grade;
   if (g.enabled === false) return img;
 
-  const exposure = g.exposure == null ? 1 : g.exposure;
-  const knee = g.highlightKnee == null ? 1 : g.highlightKnee;
-  const shoulderAmt = g.highlightRolloff == null ? 0 : g.highlightRolloff;
   const gainFalloff = g.gainFalloff == null ? 0 : g.gainFalloff;
 
   img.scan(0,0,img.bitmap.width,img.bitmap.height,function(x,y,idx){
     let r=this.bitmap.data[idx], gr=this.bitmap.data[idx+1], b=this.bitmap.data[idx+2];
 
-    // 1) overall exposure, before anything else looks at brightness
-    if (exposure !== 1){ r*=exposure; gr*=exposure; b*=exposure; }
-
-    // 2) bend the top end over instead of letting it pile up on 255
-    r=shoulder(r,knee,shoulderAmt); gr=shoulder(gr,knee,shoulderAmt); b=shoulder(b,knee,shoulderAmt);
-
-    /* 3) The colour correction, but weakened as the pixel gets bright.
+    /* The colour correction, weakened as the pixel gets bright.
      *
      * The gains are unequal by design -- they cancel a red cast measured
      * against a white t-shirt. That works in the midtones and backfires in
@@ -137,8 +155,9 @@ async function buildStripBlock(photoPaths, blockW){
     const src=photoPaths[i]||photoPaths[photoPaths.length-1];
     let photo=await Jimp.read(src);
     photo.cover(blockW, cellH);     // full width + height, square corners
-    flashGrade(photo);
-    backdropGradient(photo);
+    toneStage(photo);               // brightness first...
+    flashGrade(photo);              // ...then colour...
+    backdropGradient(photo);        // ...then the vignette
     block.composite(photo, 0, i*(cellH+gap));
   }
 
@@ -167,4 +186,4 @@ async function buildStrip(photoPaths, outPath){
   return outPath;
 }
 
-module.exports = { buildStrip, flashGrade, backdropGradient, W: SHEET_W, H, STRIP_W, SHEET_W };
+module.exports = { buildStrip, toneStage, flashGrade, backdropGradient, W: SHEET_W, H, STRIP_W, SHEET_W };
