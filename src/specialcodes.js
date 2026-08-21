@@ -27,6 +27,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const config = require("../config");
 
 const LEN = 6;
 const FILE  = path.join(__dirname, "..", "data", "secrets.json");
@@ -55,6 +56,29 @@ function randomCode() {
 /* ---------- the secrets file ---------------------------------------- */
 
 let cache = null;
+
+/**
+ * Codes pinned in config.js win over the generated ones.
+ *
+ * That file is committed, so pinning them puts them in the repository --
+ * which is the thing this module was written to avoid. It is offered
+ * anyway because typing six digits twice on a 1024x600 touchscreen is its
+ * own kind of failure, and the owner made that trade knowingly. Remove
+ * the config block and the gitignored secrets file takes over again.
+ */
+function pinned() {
+  const c = config.codes;
+  if (!c) return null;
+  const m = String(c.master || "").trim();
+  const s = String(c.staff || "").trim();
+  if (!/^\d{6}$/.test(m) || !/^\d{6}$/.test(s) || m === s) return null;
+  return {
+    masterCode: m,
+    staffCode: s,
+    staffUsesPerDay: Number(c.staffUsesPerDay) > 0 ? Number(c.staffUsesPerDay) : DEFAULT_STAFF_USES_PER_DAY,
+    source: "config.js",
+  };
+}
 
 /**
  * Every voucher currently in the store, read straight off disk.
@@ -86,6 +110,9 @@ function vouchersOnDisk() {
  */
 function load(extraTaken = new Set()) {
   if (cache) return cache;
+
+  const fixed = pinned();
+  if (fixed) return (cache = fixed);
 
   let s = readJson(FILE, null);
   let created = false;

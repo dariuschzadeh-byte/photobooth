@@ -23,6 +23,23 @@ module.exports = {
     trustLocalhost: true,
   },
 
+  // ---- the two codes that are not vouchers ---------------------------
+  // MASTER: unlimited, never burned. STAFF: works staffUsesPerDay times
+  // per calendar day, for the morning sample strip.
+  //
+  // Set here on purpose, which means they are committed and this repo is
+  // public: anyone who finds it can print for free with the master code
+  // until it is changed. That was a deliberate call -- it saves typing
+  // them on the booth's 7" screen, and the codes are cheap to rotate.
+  //
+  // To take them back out of git: delete this block. The booth then falls
+  // back to data/secrets.json, which is gitignored, generating its own
+  // pair on first start and showing them via SHOW-CODES.bat.
+  codes: {
+    master: "903671",
+    staff: "480215",
+  },
+
   codeLength: 6,
   photos: 3,
 

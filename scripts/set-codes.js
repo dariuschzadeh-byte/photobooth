@@ -43,6 +43,16 @@ function pick(explicit, wantRandom) {
   return c;
 }
 
+// Codes pinned in config.js win at runtime, so writing secrets.json here
+// would report success and change nothing. Say so instead of lying.
+const config = require("../config");
+if (config.codes && (flag("master") || flag("staff") || has("new-master") || has("new-staff") || flag("uses"))) {
+  console.error("Refusing: the codes are pinned in config.js, so anything written here would be ignored.");
+  console.error("  Edit the `codes` block in config.js instead, then restart the booth.");
+  console.error("  Delete that block to go back to generated codes in data/secrets.json.");
+  process.exit(1);
+}
+
 const master = pick(flag("master"), has("new-master"));
 const staff  = pick(flag("staff"),  has("new-staff"));
 const uses   = flag("uses");

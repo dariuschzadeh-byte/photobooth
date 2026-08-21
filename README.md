@@ -21,7 +21,7 @@ with a plain `npm install`.
 | Stop | Desktop icon **2 - STOP PHOTOBOOTH** (or `Alt+F4` on the guest screen) |
 | Staff code | for the morning sample strip — works **2× a day**, resets at midnight |
 | Master code | yours, unlimited, never uses up a voucher |
-| Where are the codes? | on the **admin page** — they are never written down in this repo |
+| Where are the codes? | `config.js` → `codes`, and on the **admin page** |
 | Admin page | <http://localhost:3000/admin> — codes left, release a code, test print |
 
 The printed staff guide is `BOOTH-GUIDE.html` (open it and press Ctrl+P).
