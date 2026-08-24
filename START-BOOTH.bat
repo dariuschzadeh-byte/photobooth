@@ -129,8 +129,8 @@ if exist "%HFDIR%" (
     if not exist "%PARKED%" mkdir "%PARKED%" >nul 2>&1
     echo   strips were still waiting in the printer folder from earlier.
     echo   moving them to output\unprinted so they do NOT all print at once.
-    move /y "%HFDIR%\*.png" "%PARKED%\" >nul 2>&1
-    move /y "%HFDIR%\*.jpg" "%PARKED%\" >nul 2>&1
+    move /y "%HFDIR%\*.png" "%PARKED%" >nul 2>&1
+    move /y "%HFDIR%\*.jpg" "%PARKED%" >nul 2>&1
   )
 )
 
