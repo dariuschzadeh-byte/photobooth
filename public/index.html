@@ -133,6 +133,7 @@ body{
    SCREEN 2 — CAPTURE
    ================================================================= */
 #screen-capture{ background:radial-gradient(120% 100% at 50% 35%,var(--ink-dark-2),var(--ink-dark)); }
+.error-why{ margin-top:26px; font-size:13px; opacity:.42; max-width:640px; line-height:1.5; }
 .viewfinder{ position:absolute; inset:0; overflow:hidden; background:radial-gradient(80% 60% at 50% 40%, rgba(200,170,150,.10), transparent 70%), radial-gradient(120% 120% at 50% 50%, transparent 55%, rgba(0,0,0,.45)); }
 .viewfinder .shimmer{ position:absolute; inset:-40%; background:radial-gradient(closest-side, rgba(255,240,225,.06), transparent); animation:drift 7s ease-in-out infinite alternate; }
 /* logo identical in size + position to the code-entry screen */
@@ -346,6 +347,11 @@ html,body{ background:#15110f; }
           <div class="logo"><div class="main">fr-anz</div><div class="sub">with benefits</div></div>
           <div class="error-head">oops — something went wrong</div>
           <div class="error-sub">your code is still valid — please try again<br>or grab someone from the team &#9825;</div>
+          <!-- For staff, not for guests: the actual reason, small and grey.
+               Without it the screen says "oops" and whoever has to fix the
+               booth is left guessing between a flat flash, a lens switched
+               back to AF, a full card and an unplugged cable. -->
+          <div class="error-why" id="errorWhy"></div>
         </div>
       </section>
 
@@ -484,14 +490,14 @@ async function startSession(){
       await capture(i);
       await sleep(CONFIG.afterCaptureMs);
     }
-  } catch (e) { return failSession(); }
+  } catch (e) { return failSession(e && e.message); }
 
   showScreen("screen-thanks");
   await sleep(CONFIG.thanksMs);
 
   showScreen("screen-print");
   const printed = await printStrip();
-  if (!printed) return failSession();
+  if (!printed) return failSession(printError);
   await sleep(CONFIG.finalHoldMs);
 
   // only auto-reset if the guest hasn't tapped through already
@@ -499,7 +505,10 @@ async function startSession(){
 }
 
 /* camera/printer failed -> give the code back + show the error screen */
-async function failSession(){
+async function failSession(why){
+  const el = $("#errorWhy");
+  if (el) el.textContent = why ? "for the team: " + why : "";
+  if (why) console.error("[booth] session failed:", why);
   try { await API.release(); } catch (e) {}
   session.id = null;
   showScreen("screen-error");
@@ -534,7 +543,7 @@ async function capture(i){
     if (!r || !r.ok || !r.url) {                   // one silent retry, then give up
       try { r = await API.capture(i); } catch (e) {}
     }
-    if (!r || !r.ok || !r.url) throw new Error("capture failed");
+    if (!r || !r.ok || !r.url) throw new Error((r && r.error) || "the camera did not return a photo");
     session.photos[i] = r.url;
     pdotsEl.children[i].classList.add("on");
     await sleep(CONFIG.flashMs);
@@ -543,6 +552,7 @@ async function capture(i){
   }
 }
 
+let printError = null;      // reason from the last failed print, for the error screen
 async function printStrip(){
   const strip = $("#strip"), bar = $("#printBar"), hint = $("#tapHint");
   const cells = strip.querySelectorAll("[data-cell]");
@@ -550,9 +560,12 @@ async function printStrip(){
   cells.forEach(c => { c.classList.remove("dev"); c.style.backgroundImage = ""; }); hint.classList.remove("show");
   void strip.offsetWidth;
   strip.classList.add("in");
-  let result = null;
-  try { result = await API.print(); } catch (e) {}
-  if (!result || !result.ok) return false;         // print failed -> error screen
+  let result = null, why = null;
+  try { result = await API.print(); } catch (e) { why = e && e.message; }
+  if (!result || !result.ok) {                     // print failed -> error screen
+    printError = (result && result.error) || why || "the printer did not accept the strip";
+    return false;
+  }
   bar.style.transition = "width " + CONFIG.printMs + "ms linear";
   requestAnimationFrame(() => { bar.style.width = "100%"; });
   cells.forEach((c, i) => setTimeout(() => {

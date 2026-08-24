@@ -82,7 +82,17 @@ const sessions = new Map(); // id -> { dir, photos: [], code, kind: guest|master
  * and a frame the flash never lit is dark at either size.
  */
 async function frameBrightness(file) {
-  for (const source of [exifTool.thumbnail(file), file]) {
+  /* The thumbnail read is inside the try for a reason. src/exif.js is a
+   * hand-written parser walking untrusted binary, and it was verified
+   * against an iPhone file, not a Canon one. Left outside, a single
+   * unexpected byte layout would throw straight out of /api/capture, the
+   * kiosk would abort, and the guest would get the error screen -- because
+   * a DIAGNOSTIC failed. Nothing in here may end a session. */
+  let sources = [];
+  try { sources = [exifTool.thumbnail(file), file]; }
+  catch (e) { sources = [file]; }
+
+  for (const source of sources) {
     if (!source) continue;
     try {
       const img = await Jimp.read(source);
@@ -122,8 +132,15 @@ async function captureChecked(sessionDir, index) {
   const wait = cfg.waitMs == null ? 4500 : cfg.waitMs;
 
   let file = await camera.capture(sessionDir, index);
-  let mean = await frameBrightness(file);
 
+  /* From here on the photo exists and the session is safe. Everything
+   * below is quality control, and quality control that can end a session
+   * is worse than no quality control at all. */
+  let mean = null;
+  try { mean = await frameBrightness(file); }
+  catch (e) { console.warn("[flash] brightness check failed, skipping it: " + e.message); return { file, brightness: null }; }
+
+  try {
   for (let attempt = 1; attempt <= extra; attempt++) {
     if (mean === null || mean >= threshold) break;
 
@@ -159,6 +176,15 @@ async function captureChecked(sessionDir, index) {
       try { if (retryFile) fs.rmSync(retryFile, { force: true }); } catch (e) {}
       try { fs.renameSync(parked, file); } catch (e) {}
     }
+  }
+  } catch (e) {
+    // Whatever went wrong in the retry, the first frame is still on disk.
+    console.warn("[flash] retry logic failed, keeping the frame we have: " + e.message);
+    events.log("capture_retry_failed", { photo: index + 1, error: e.message });
+    try { if (!fs.existsSync(file)) {
+      const parked = fs.readdirSync(sessionDir).find(f => f.startsWith(path.basename(file) + ".attempt"));
+      if (parked) fs.renameSync(path.join(sessionDir, parked), file);
+    } } catch (e2) {}
   }
 
   if (mean !== null && mean < threshold) {
