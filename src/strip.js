@@ -74,6 +74,7 @@ function flashGrade(img){
   if (g.enabled === false) return img;
 
   const gainFalloff = g.gainFalloff == null ? 0 : g.gainFalloff;
+  const warmth = g.warmth == null ? 0 : g.warmth;
 
   img.scan(0,0,img.bitmap.width,img.bitmap.height,function(x,y,idx){
     let r=this.bitmap.data[idx], gr=this.bitmap.data[idx+1], b=this.bitmap.data[idx+2];
@@ -95,6 +96,20 @@ function flashGrade(img){
     const lum0 = (0.299*r + 0.587*gr + 0.114*b) / 255;
     const w = gainFalloff > 0 ? 1 - Math.pow(Math.min(1, Math.max(0, lum0)), gainFalloff) : 1;
     r*=1+(g.rGain-1)*w; gr*=1+(g.gGain-1)*w; b*=1+(g.bGain-1)*w;
+
+    /* One dial for "warmer" / "cooler", on top of the measured gains.
+     *
+     * The gains above are a correction: they cancel a cast the camera
+     * introduces, and they were measured against a white t-shirt. Nudging
+     * them to taste destroys that measurement and nobody can tell later
+     * which number was evidence and which was preference. This is the
+     * preference dial, kept separate so the correction stays intact.
+     *
+     * Positive lifts red and drops blue (warmer, more tan in skin),
+     * negative does the reverse. 0.06 is a gentle but clearly visible
+     * step; beyond about 0.15 the pink backdrop starts turning orange. */
+    if (warmth) { r *= 1 + warmth; b *= 1 - warmth; }
+
     r=clamp(r); gr=clamp(gr); b=clamp(b);
     let lum=0.299*r+0.587*gr+0.114*b;
     r=lum+(r-lum)*g.sat; gr=lum+(gr-lum)*g.sat; b=lum+(b-lum)*g.sat;

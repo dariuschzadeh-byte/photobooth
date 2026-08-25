@@ -145,6 +145,14 @@ module.exports = {
       // towards white and stops bright pink collapsing to blue-white -- use
       // it only if that patch comes back, and change one thing at a time.
       gainFalloff: 0,
+      // Warmer / cooler, to taste. Positive = more red, less blue, i.e.
+      // more tan in skin and a warmer backdrop. Kept separate from the
+      // gains above on purpose: those are a measured correction for the
+      // camera's own cast, and mixing preference into them means nobody
+      // can tell later which number was evidence and which was taste.
+      // 0.06 is a gentle step, past ~0.15 the pink turns orange.
+      warmth: 0,
+
       sat: 0.94,              // lower = softer pastel (was 0.97)
 
       // Fraction of the full range added to the darkest areas. This stood
