@@ -20,7 +20,7 @@ const config = require("../config");
 const { toneStage, flashGrade, backdropGradient } = require("../src/strip");
 
 const EXPOSURES = [1.00, 0.92, 0.84];
-const WARMTHS   = [0, 0.06, 0.12];
+const WARMTHS   = [0.10, 0.25, 0.40];
 
 function newestSession() {
   try {

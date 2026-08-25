@@ -77,6 +77,9 @@ function flashGrade(img){
   const warmth = g.warmth == null ? 0 : g.warmth;
   const warmthFloor = g.warmthFloor == null ? 0 : g.warmthFloor;
   const warmthFull  = g.warmthFull  == null ? 0 : g.warmthFull;
+  const skinOnly = g.warmthSkinOnly !== false;
+  const skinLo = g.warmthSkinLo == null ? 0 : g.warmthSkinLo;
+  const skinHi = g.warmthSkinHi == null ? 12 : g.warmthSkinHi;
 
   img.scan(0,0,img.bitmap.width,img.bitmap.height,function(x,y,idx){
     let r=this.bitmap.data[idx], gr=this.bitmap.data[idx+1], b=this.bitmap.data[idx+2];
@@ -124,8 +127,45 @@ function flashGrade(img){
         wt = wt < 0 ? 0 : wt > 1 ? 1 : wt;
         wt = wt * wt * (3 - 2 * wt);        // smoothstep: no visible edge
       }
-      const a = warmth * wt;
-      r *= 1 + a; b *= 1 - a;
+      /* Keep the warmth off the backdrop.
+       *
+       * Warmth strong enough to tan light skin also turns the pink wall
+       * orange and the white shirts cream, because both are bright and the
+       * ramp above only looks at brightness. Measured at warmth 0.25 the
+       * backdrop's R-B doubles, from 40 to 80 -- a different brand colour,
+       * not a warmer photo.
+       *
+       * Skin and the backdrop separate cleanly on one number here. After
+       * the gains, skin sits at green-minus-blue around +14, the fr-anz
+       * pink at about -6, a white shirt near +4. Ramping across that gap
+       * leaves the wall alone, warms skin fully, and gives shirts a third
+       * of the effect, which reads as film warmth rather than a stain.
+       *
+       * skinOnly:false turns this off and warms everything evenly. */
+      let skin = 1;
+      if (skinOnly) {
+        skin = ((gr - b) - skinLo) / (skinHi - skinLo);
+        skin = skin < 0 ? 0 : skin > 1 ? 1 : skin;
+        skin = skin * skin * (3 - 2 * skin);
+      }
+
+      const a = warmth * wt * skin;
+
+      /* Pull green and blue DOWN rather than pushing red up.
+       *
+       * Lifting red is the obvious move and it does not work here: on light
+       * skin red already sits near 240 and clips at 255 almost immediately,
+       * so the pixel gets brighter and pinker instead of browner. Measured
+       * on R240 G200 B185 at a=0.10, lifting red leaves mean brightness at
+       * 207 against 208 -- no tan at all, just a sunburn.
+       *
+       * Taking green and blue down instead darkens and warms in one move,
+       * which is what a tan actually is. Blue falls furthest (skin turns
+       * yellow-brown, not red), green follows at about a third of that so
+       * the result does not slide towards orange. */
+      r *= 1 + a * 0.10;
+      gr *= 1 - a * 0.35;
+      b  *= 1 - a * 1.10;
     }
 
     r=clamp(r); gr=clamp(gr); b=clamp(b);

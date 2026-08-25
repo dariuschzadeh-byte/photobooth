@@ -151,7 +151,11 @@ module.exports = {
       // camera's own cast, and mixing preference into them means nobody
       // can tell later which number was evidence and which was taste.
       // 0.06 is a gentle step, past ~0.15 the pink turns orange.
-      warmth: 0,
+      // Switched on. Works by pulling green and blue down rather than
+      // pushing red up -- see the note in src/strip.js. At 0.25 light skin
+      // moves from red-minus-blue 40 to 89 and drops 19 in brightness --
+      // a clear tan. Past about 0.40 it reads orange rather than tanned.
+      warmth: 0.25,
 
       // How the warmth is spread across the tonal range, as a fraction of
       // full white. Below `warmthFloor` nothing is warmed at all; above
@@ -166,6 +170,16 @@ module.exports = {
       // Set them equal to disable the ramp and warm everything evenly.
       warmthFloor: 0.30,
       warmthFull: 0.62,
+
+      // Keep the warmth off the backdrop. Skin and the fr-anz pink split
+      // cleanly on green-minus-blue: after the gains, skin sits near +14,
+      // the wall near -6, a white shirt near +4. The ramp below leaves the
+      // wall alone, warms skin fully, and gives shirts about a third --
+      // film warmth rather than a stain. Set warmthSkinOnly false to warm
+      // the whole frame evenly instead.
+      warmthSkinOnly: true,
+      warmthSkinLo: 0,
+      warmthSkinHi: 12,
 
       sat: 0.94,              // lower = softer pastel (was 0.97)
 
