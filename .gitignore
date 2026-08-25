@@ -18,6 +18,9 @@ data/cloud.json
 data/reporter-cursor.json
 data/events.log
 data/codes-*.csv
+data/import-codes.txt
+data/import-*.txt
+data/import-*.csv
 data/redemptions.log
 data/server.log
 _attic/

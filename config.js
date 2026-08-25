@@ -153,6 +153,20 @@ module.exports = {
       // 0.06 is a gentle step, past ~0.15 the pink turns orange.
       warmth: 0,
 
+      // How the warmth is spread across the tonal range, as a fraction of
+      // full white. Below `warmthFloor` nothing is warmed at all; above
+      // `warmthFull` it is applied fully; in between it eases in.
+      //
+      // This is what lets one setting work for everyone who uses the
+      // booth. Warmth applied evenly turns already-dark skin muddy and
+      // orange while doing very little for pale skin. With the ramp, light
+      // skin gets the tan the dial exists for and dark skin comes out as
+      // the camera saw it.
+      //
+      // Set them equal to disable the ramp and warm everything evenly.
+      warmthFloor: 0.30,
+      warmthFull: 0.62,
+
       sat: 0.94,              // lower = softer pastel (was 0.97)
 
       // Fraction of the full range added to the darkest areas. This stood

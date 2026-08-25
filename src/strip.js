@@ -75,6 +75,8 @@ function flashGrade(img){
 
   const gainFalloff = g.gainFalloff == null ? 0 : g.gainFalloff;
   const warmth = g.warmth == null ? 0 : g.warmth;
+  const warmthFloor = g.warmthFloor == null ? 0 : g.warmthFloor;
+  const warmthFull  = g.warmthFull  == null ? 0 : g.warmthFull;
 
   img.scan(0,0,img.bitmap.width,img.bitmap.height,function(x,y,idx){
     let r=this.bitmap.data[idx], gr=this.bitmap.data[idx+1], b=this.bitmap.data[idx+2];
@@ -105,10 +107,26 @@ function flashGrade(img){
      * which number was evidence and which was preference. This is the
      * preference dial, kept separate so the correction stays intact.
      *
-     * Positive lifts red and drops blue (warmer, more tan in skin),
-     * negative does the reverse. 0.06 is a gentle but clearly visible
-     * step; beyond about 0.15 the pink backdrop starts turning orange. */
-    if (warmth) { r *= 1 + warmth; b *= 1 - warmth; }
+     * It is weighted by how light the pixel already is, and that is not a
+     * refinement -- it is what makes the filter usable on everybody who
+     * walks into this booth. Warmth added evenly turns already-dark skin
+     * muddy and orange while barely touching pale skin. Ramping it from
+     * warmthFloor to warmthFull means light skin picks up the tan the dial
+     * is there for, and dark skin is left as the camera saw it.
+     *
+     * Set warmthFloor equal to warmthFull to go back to a flat curve. */
+    if (warmth) {
+      const lum = (0.299*r + 0.587*gr + 0.114*b) / 255;
+      let wt;
+      if (warmthFull <= warmthFloor) wt = 1;
+      else {
+        wt = (lum - warmthFloor) / (warmthFull - warmthFloor);
+        wt = wt < 0 ? 0 : wt > 1 ? 1 : wt;
+        wt = wt * wt * (3 - 2 * wt);        // smoothstep: no visible edge
+      }
+      const a = warmth * wt;
+      r *= 1 + a; b *= 1 - a;
+    }
 
     r=clamp(r); gr=clamp(gr); b=clamp(b);
     let lum=0.299*r+0.587*gr+0.114*b;
