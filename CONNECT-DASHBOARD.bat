@@ -1,4 +1,8 @@
 @echo off
+REM  Delayed expansion: without it cmd.exe substitutes %GO% while it parses
+REM  the if-block below, i.e. BEFORE set /p has run, so the prompt is read
+REM  and then ignored. Classic, silent, and it cost this file its restart.
+setlocal enabledelayedexpansion
 REM ====================================================================
 REM  fr-anz photobooth - CONNECT TO THE DASHBOARD
 REM  Writes the cloud settings, then tests the connection and names
@@ -21,7 +25,7 @@ set RESULT=%errorlevel%
 if "%RESULT%"=="0" (
   echo.
   set /p GO=  Restart the booth now so it starts reporting? (y/n):
-  if /i "%GO%"=="y" (
+  if /i "!GO!"=="y" (
     call "%~dp0STOP-BOOTH.bat" >nul 2>&1
     call "%~dp0START-BOOTH.bat"
   )
