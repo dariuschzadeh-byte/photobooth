@@ -161,6 +161,13 @@ module.exports = {
       // has to be the reference, not a preference.
       warmth: 0,
 
+      // The backdrop's hue: 0 leaves it as photographed, higher pushes it
+      // from salmon towards the luminous violet-pink of the reference
+      // strips. Rides the inverse of the skin gate, so it moves the wall
+      // and not the faces. Around 0.10 is a clear shift; past 0.25 the
+      // wall starts reading purple. Use TRY-COLOR.bat to choose.
+      magenta: 0,
+
       // How the warmth is spread across the tonal range, as a fraction of
       // full white. Below `warmthFloor` nothing is warmed at all; above
       // `warmthFull` it is applied fully; in between it eases in.

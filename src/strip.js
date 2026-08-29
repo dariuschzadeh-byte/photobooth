@@ -75,6 +75,7 @@ function flashGrade(img){
 
   const gainFalloff = g.gainFalloff == null ? 0 : g.gainFalloff;
   const warmth = g.warmth == null ? 0 : g.warmth;
+  const magenta = g.magenta == null ? 0 : g.magenta;
   const warmthFloor = g.warmthFloor == null ? 0 : g.warmthFloor;
   const warmthFull  = g.warmthFull  == null ? 0 : g.warmthFull;
   const skinOnly = g.warmthSkinOnly !== false;
@@ -166,6 +167,32 @@ function flashGrade(img){
       r *= 1 + a * 0.10;
       gr *= 1 - a * 0.35;
       b  *= 1 - a * 1.10;
+    }
+
+    /* The backdrop's hue, on the salmon <-> magenta axis.
+     *
+     * The strips kept as the reference have a luminous pink leaning
+     * violet. What comes off the booth now is a duller salmon, leaning
+     * orange -- and the grade is bit-identical to the one those strips
+     * were printed with, so the difference is the wall itself: repainted
+     * matte, quite possibly from a different tin.
+     *
+     * Salmon and magenta separate on the same number the warmth dial
+     * uses, just the other way round: the backdrop has blue at or above
+     * green, skin has green clearly above blue. So this rides the INVERSE
+     * of the skin gate -- it moves the wall and leaves faces alone, which
+     * is what stops the whole thing turning purple.
+     */
+    if (magenta) {
+      let wall = 1;
+      if (skinOnly) {
+        wall = 1 - (((gr - b) - skinLo) / (skinHi - skinLo));
+        wall = wall < 0 ? 0 : wall > 1 ? 1 : wall;
+        wall = wall * wall * (3 - 2 * wall);
+      }
+      const m = magenta * wall;
+      b  *= 1 + m * 1.00;
+      gr *= 1 - m * 0.55;
     }
 
     r=clamp(r); gr=clamp(gr); b=clamp(b);
