@@ -25,11 +25,12 @@ const Jimp = require("jimp");
 const config = require("../config");
 const { toneStage, flashGrade, backdropGradient } = require("../src/strip");
 
-// Wide on purpose. The first version of this grid topped out at 0.20 and
-// every option on it still looked salmon -- a range that cannot reach the
-// answer is worse than no grid.
-const MAGENTAS = [0.30, 0.50, 0.70];   // violet pink -> deep violet, across
-const SATS     = [1.00, 1.12, 1.24];   // vivid -> very vivid, down
+// Centred on the answer now that both ends have been seen on paper: 0
+// printed too salmon, 0.50 printed hot pink. A grid is only useful once
+// it brackets the target closely -- too wide and every square is wrong in
+// a different direction.
+const MAGENTAS = [0.10, 0.17, 0.26];   // gentle -> clear violet lean, across
+const SATS     = [0.98, 1.03, 1.10];   // natural -> more glow, down
 
 function newestSession() {
   try {
