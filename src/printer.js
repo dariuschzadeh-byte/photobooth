@@ -56,12 +56,17 @@ async function printStrip(stripPath) {
      *                                 2 inch cut. Empty = printer default.
      */
     const script = path.join(__dirname, "..", "scripts", "print-windows.ps1");
-    const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, "-Image", stripPath];
+    const args = ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+                  "-ExecutionPolicy", "Bypass", "-File", script, "-Image", stripPath];
     if (config.printer.windowsPrinter) args.push("-Printer", config.printer.windowsPrinter);
     if (config.printer.windowsPaperSize) args.push("-PaperSize", config.printer.windowsPaperSize);
 
     return new Promise((resolve, reject) => {
-      execFile("powershell.exe", args, { timeout: 60000 }, (err, stdout, stderr) => {
+      /* windowsHide, or a black console window flashes across the guest
+       * screen at the exact moment the strip is printing -- which is the
+       * one moment guests are watching, and it gives away that there is a
+       * Windows PC behind the booth. */
+      execFile("powershell.exe", args, { timeout: 60000, windowsHide: true }, (err, stdout, stderr) => {
         const out = String(stdout || "") + String(stderr || "");
         if (err) return reject(new Error("Windows print failed: " + (out.trim() || err.message)));
         if (/not found/i.test(out)) return reject(new Error(out.trim()));
@@ -74,7 +79,7 @@ async function printStrip(stripPath) {
   // Kept for completeness; "windows" above gives control over the paper
   // size, which this cannot.
   return new Promise((resolve, reject) => {
-    execFile("mspaint.exe", ["/pt", stripPath], (err) => {
+    execFile("mspaint.exe", ["/pt", stripPath], { windowsHide: true }, (err) => {
       if (err) return reject(new Error("Print failed: " + err.message));
       resolve({ printed: true, via: "default" });
     });

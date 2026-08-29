@@ -41,7 +41,9 @@ function captureReal(sessionDir, index) {
     // digiCamControl CLI: capture + download to a target file
     //   CameraControlCmd.exe /capture /filename "C:\...\photo_1.jpg"
     const args = ["/filename", dest, "/capture"];
-    execFile(config.camera.cmdPath, args, { timeout: config.camera.captureTimeoutMs },
+    // windowsHide for the same reason as in printer.js: without it a
+    // console window blinks over the guest screen on every single shot.
+    execFile(config.camera.cmdPath, args, { timeout: config.camera.captureTimeoutMs, windowsHide: true },
       (err, stdout, stderr) => {
         const output = String(stdout || "") + String(stderr || "");
         // Canon refuses to fire in AF mode when it cannot find focus -- and the
