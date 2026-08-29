@@ -141,6 +141,32 @@ function freeSpaceGB(dir) {
     }
   }
 
+  /* 3b -- Hot Folder Print's own logs -------------------------------- */
+  //
+  // HFP reads these when it starts. On a machine that has run for months
+  // they grow without limit, and a few gigabytes here is enough to leave
+  // the splash screen hanging for minutes with nothing actually broken.
+  console.log("\n  3b. Hot Folder Print's log folder");
+  const LOGDIR = "C:\\DNP\\HotFolderPrint\\Logs";
+  try {
+    let total = 0;
+    const files = fs.readdirSync(LOGDIR).map(f => {
+      let size = 0;
+      try { size = fs.statSync(path.join(LOGDIR, f)).size; } catch (e) {}
+      total += size;
+      return { f, size };
+    }).sort((a, b) => b.size - a.size);
+
+    const mb = total / (1024 * 1024);
+    info(files.length + " file(s), " + (mb > 1024 ? (mb / 1024).toFixed(1) + " GB" : Math.round(mb) + " MB"));
+    files.slice(0, 3).forEach(x => info("   " + Math.round(x.size / (1024 * 1024)) + " MB  " + x.f));
+
+    if (mb > 500) bad("these logs are huge (" + Math.round(mb) + " MB) - this alone can leave Hot Folder Print stuck on its splash screen. Run CLEAN-PRINTER-LOGS.bat.");
+    else ok("a sensible size");
+  } catch (e) {
+    info("no log folder found at " + LOGDIR);
+  }
+
   /* 4 -- disk space -------------------------------------------------- */
   console.log("\n  4. Disk space");
   const gb = freeSpaceGB(config.paths.output);
