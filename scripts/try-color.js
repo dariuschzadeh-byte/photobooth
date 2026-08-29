@@ -25,8 +25,11 @@ const Jimp = require("jimp");
 const config = require("../config");
 const { toneStage, flashGrade, backdropGradient } = require("../src/strip");
 
-const MAGENTAS = [0.00, 0.10, 0.20];   // salmon -> violet pink, across
-const SATS     = [0.94, 1.06, 1.18];   // duller -> more vivid, down
+// Wide on purpose. The first version of this grid topped out at 0.20 and
+// every option on it still looked salmon -- a range that cannot reach the
+// answer is worse than no grid.
+const MAGENTAS = [0.30, 0.50, 0.70];   // violet pink -> deep violet, across
+const SATS     = [1.00, 1.12, 1.24];   // vivid -> very vivid, down
 
 function newestSession() {
   try {

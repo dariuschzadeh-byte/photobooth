@@ -166,7 +166,12 @@ module.exports = {
       // strips. Rides the inverse of the skin gate, so it moves the wall
       // and not the faces. Around 0.10 is a clear shift; past 0.25 the
       // wall starts reading purple. Use TRY-COLOR.bat to choose.
-      magenta: 0,
+      // Pushed hard, on request. At 0.50 the wall goes from blue eight
+      // below green to blue forty-six above it -- salmon to a proper
+      // violet pink. Skin is untouched at any value: measured identical
+      // at 0.00 and at 0.80, because the gate keys on the one number that
+      // separates them.
+      magenta: 0.50,
 
       // How the warmth is spread across the tonal range, as a fraction of
       // full white. Below `warmthFloor` nothing is warmed at all; above
@@ -192,7 +197,9 @@ module.exports = {
       warmthSkinLo: 0,
       warmthSkinHi: 12,
 
-      sat: 0.94,              // lower = softer pastel (was 0.97)
+      // Above 1 now. The reference strips glow; 0.94 was muting exactly
+      // the colour we are trying to bring back.
+      sat: 1.12,
 
       // Fraction of the full range added to the darkest areas. This stood
       // at 0.22 and never lifted anything: the code treated it as raw
@@ -222,6 +229,13 @@ module.exports = {
     backdrop: {
       enabled: true,
       strength: 0.18,         // lower = lighter, more even background (was 0.20)
+
+      // Warm pink in the middle, drifting almost blue at the edges -- the
+      // wall lit from the centre and going cold where the light thins out.
+      // Rides the same distance as the vignette and the same wall gate as
+      // grade.magenta, so it never lands on an arm near the frame edge.
+      coolEdges: 0.30,
+
       satBoost: 0.0,
       headBias: 0.42,
       falloff: 1.8,

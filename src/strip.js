@@ -230,11 +230,40 @@ function backdropGradient(img){
   const w=img.bitmap.width, h=img.bitmap.height;
   const cx=w/2, cy=h*S.backdrop.headBias;
   const str=S.backdrop.strength, satb=S.backdrop.satBoost, p=S.backdrop.falloff;
+  const cool = S.backdrop.coolEdges == null ? 0 : S.backdrop.coolEdges;
+  const gate = S.grade && S.grade.warmthSkinOnly !== false;
+  const glo = S.grade && S.grade.warmthSkinLo != null ? S.grade.warmthSkinLo : 0;
+  const ghi = S.grade && S.grade.warmthSkinHi != null ? S.grade.warmthSkinHi : 12;
+
   img.scan(0,0,w,h,function(x,y,idx){
     let dx=(x-cx)/(w/2), dy=(y-cy)/(h/2);
     let d=Math.sqrt(dx*dx+dy*dy); if(d>1)d=1;
     const m=Math.pow(d,p), fac=1-str*m;
     let r=this.bitmap.data[idx]*fac, gr=this.bitmap.data[idx+1]*fac, b=this.bitmap.data[idx+2]*fac;
+
+    /* Cool the corners.
+     *
+     * The look being chased has a warm pink centre falling away to
+     * something almost blue at the edges -- the wall lit from the middle
+     * and going cold where the light does not reach. The vignette already
+     * darkens by distance; this bends the hue by the same distance.
+     *
+     * Gated to the wall exactly as grade.magenta is: skin has green well
+     * above blue, the backdrop does not. Without that, an arm near the
+     * frame edge would turn blue while the same arm in the middle did
+     * not, which reads as a fault rather than a look. */
+    if (cool) {
+      let wall = 1;
+      if (gate) {
+        wall = 1 - (((gr - b) - glo) / (ghi - glo));
+        wall = wall < 0 ? 0 : wall > 1 ? 1 : wall;
+        wall = wall * wall * (3 - 2 * wall);
+      }
+      const c = cool * m * wall;
+      b  *= 1 + c;
+      gr *= 1 - c * 0.45;
+      r  *= 1 - c * 0.18;
+    }
     const lum=0.299*r+0.587*gr+0.114*b, s=1+satb*m;
     r=lum+(r-lum)*s; gr=lum+(gr-lum)*s; b=lum+(b-lum)*s;
     this.bitmap.data[idx]=clamp(r); this.bitmap.data[idx+1]=clamp(gr); this.bitmap.data[idx+2]=clamp(b);
