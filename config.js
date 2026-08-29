@@ -238,7 +238,17 @@ module.exports = {
   },
 
   printer: {
+    // "hotfolder" -- the normal route: drop the sheet into the folder DNP
+    //               Hot Folder Print watches, and it prints at the right
+    //               size with the cut.
+    // "windows"   -- straight to the Windows printer, no HFP involved.
+    //               For when HFP breaks, which it did for three days
+    //               while Windows reported the printer perfectly ready.
+    //               Test it first with TRY-DIRECT-PRINT.bat, then set the
+    //               paper size that came out right.
     mode: "hotfolder",
+    windowsPrinter: "DS-RX1",
+    windowsPaperSize: "",        // empty = the printer's default
     hotFolder: "C:\\DNP\\HotFolderPrint\\Prints\\s6x2_2",
     copies: 1,
   },

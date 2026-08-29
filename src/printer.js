@@ -41,7 +41,38 @@ async function printStrip(stripPath) {
     return { printed: true, via: "hotfolder", file: dest };
   }
 
-  // "default": hand the file to Windows to print on the default printer
+  if (config.printer.mode === "windows") {
+    /* Straight to the Windows printer, no Hot Folder Print involved.
+     *
+     * The booth does not actually need HFP: it needs the sheet on paper.
+     * When HFP breaks -- which it did, taking three days of printing with
+     * it while Windows reported the printer perfectly ready -- this route
+     * keeps the booth earning. It prints edge to edge with no margins,
+     * because the strip is already built at the exact sheet size and any
+     * margin would shift it relative to the printer's cut.
+     *
+     * config.printer.windowsPrinter   name, or part of it
+     * config.printer.windowsPaperSize the driver's size, e.g. one with a
+     *                                 2 inch cut. Empty = printer default.
+     */
+    const script = path.join(__dirname, "..", "scripts", "print-windows.ps1");
+    const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, "-Image", stripPath];
+    if (config.printer.windowsPrinter) args.push("-Printer", config.printer.windowsPrinter);
+    if (config.printer.windowsPaperSize) args.push("-PaperSize", config.printer.windowsPaperSize);
+
+    return new Promise((resolve, reject) => {
+      execFile("powershell.exe", args, { timeout: 60000 }, (err, stdout, stderr) => {
+        const out = String(stdout || "") + String(stderr || "");
+        if (err) return reject(new Error("Windows print failed: " + (out.trim() || err.message)));
+        if (/not found/i.test(out)) return reject(new Error(out.trim()));
+        resolve({ printed: true, via: "windows", detail: out.trim().slice(0, 200) });
+      });
+    });
+  }
+
+  // "default": hand the file to Windows to print on the default printer.
+  // Kept for completeness; "windows" above gives control over the paper
+  // size, which this cannot.
   return new Promise((resolve, reject) => {
     execFile("mspaint.exe", ["/pt", stripPath], (err) => {
       if (err) return reject(new Error("Print failed: " + err.message));
