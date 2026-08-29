@@ -167,6 +167,29 @@ body{
   text-shadow:0 6px 40px rgba(0,0,0,.55); }
 .cap-hold .sub{ display:block; font-size:26px; font-weight:400; margin-top:18px; opacity:.8; letter-spacing:.04em; }
 
+/* the three dots that breathe while the photo transfers over USB */
+.cap-hold .dots{ display:inline-block; margin-left:10px; vertical-align:middle; }
+.cap-hold .dots b{ display:inline-block; width:9px; height:9px; margin:0 3px; border-radius:50%;
+  background:currentColor; opacity:.35; animation:blink 1.25s ease-in-out infinite; }
+.cap-hold .dots b:nth-child(2){ animation-delay:.18s; }
+.cap-hold .dots b:nth-child(3){ animation-delay:.36s; }
+@keyframes blink{ 0%,100%{ opacity:.25; transform:translateY(0); } 45%{ opacity:1; transform:translateY(-4px); } }
+
+/* the shot you just took, filling the recharge pause */
+.cap-review{ position:absolute; inset:0; z-index:6; opacity:0; pointer-events:none;
+  transition:opacity .28s ease; background:var(--ink-dark); }
+.cap-review.show{ opacity:1; }
+.cap-review img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+  transform:scale(1.06); transition:transform 3.2s ease-out; }
+.cap-review.show img{ transform:scale(1); }
+.cap-review-bar{ position:absolute; left:0; right:0; bottom:0; padding:26px 34px 30px;
+  display:flex; align-items:baseline; justify-content:space-between; gap:20px;
+  background:linear-gradient(to top, rgba(0,0,0,.62), rgba(0,0,0,0)); }
+.cap-review-bar .line{ color:#fff; font-size:44px; font-weight:600; letter-spacing:-.01em;
+  text-shadow:0 4px 24px rgba(0,0,0,.5); }
+.cap-review-bar .next{ color:#fff; opacity:.82; font-size:22px; font-weight:400; letter-spacing:.03em;
+  white-space:nowrap; text-shadow:0 4px 24px rgba(0,0,0,.5); }
+
 .flash{ position:absolute; inset:0; z-index:5; background:#fff; opacity:0; pointer-events:none; }
 .flash.go{ animation:flash .28s ease-out; }
 
@@ -299,7 +322,20 @@ html,body{ background:#15110f; }
           <div class="cd-number" id="cdNumber"></div>
         </div>
         <div class="cap-hold" id="capHold">
-          <div class="txt">hold still &#9825;<span class="sub">saving your photo</span></div>
+          <div class="txt">hold still &#9825;<span class="sub">saving your photo<i class="dots"><b></b><b></b><b></b></i></span></div>
+        </div>
+
+        <!-- The flash needs a few seconds to recharge between shots, and that
+             used to be a blank screen with a dead ring on it -- long enough for
+             a guest to assume something had broken. The photo just taken is
+             already on disk by then, so it goes here instead, with the wait
+             spelled out as a countdown rather than left to guesswork. -->
+        <div class="cap-review" id="capReview">
+          <img id="capReviewImg" alt="">
+          <div class="cap-review-bar">
+            <span class="line" id="capReviewLine"></span>
+            <span class="next" id="capReviewNext"></span>
+          </div>
         </div>
         <div class="flash" id="flash"></div>
       </section>
@@ -488,7 +524,7 @@ async function startSession(){
       await showCue(i);
       await countdown();
       await capture(i);
-      await sleep(CONFIG.afterCaptureMs);
+      await reviewShot(i);
     }
   } catch (e) { return failSession(e && e.message); }
 
@@ -514,6 +550,56 @@ async function failSession(why){
   showScreen("screen-error");
   await sleep(CONFIG.errorHoldMs);
   if ($("#screen-error").classList.contains("active")) resetToEntry();
+}
+
+/**
+ * Fill the flash's recharge pause with the photo just taken.
+ *
+ * The pause is not optional -- the flash needs those seconds -- but it used
+ * to be a blank screen with a dead countdown ring, which is long enough for
+ * a guest to decide the booth has crashed. The frame is already on disk by
+ * this point, so it goes on screen instead, and the wait is spelled out as
+ * a countdown rather than left to guesswork. Same duration, opposite
+ * feeling.
+ */
+const REVIEW_LINES = ["nice one &#9825;", "even better &#9825;", "that's the three &#9825;"];
+
+async function reviewShot(i) {
+  const el = $("#capReview"), img = $("#capReviewImg");
+  const url = session.photos[i];
+  const total = CONFIG.afterCaptureMs;
+  const last = i >= CONFIG.photos - 1;
+
+  // No photo to show (a capture that failed but did not throw): fall back
+  // to simply waiting, rather than presenting a broken image to a guest.
+  if (!url) { await sleep(total); return; }
+
+  $("#capReviewLine").innerHTML = REVIEW_LINES[i] || REVIEW_LINES[0];
+  const nextEl = $("#capReviewNext");
+
+  await new Promise(resolve => {
+    img.onload = img.onerror = resolve;
+    img.src = url;
+    setTimeout(resolve, 1200);          // never hang on a slow image
+  });
+
+  el.classList.add("show");
+
+  const start = performance.now();
+  const tick = () => {
+    const left = Math.max(0, Math.ceil((total - (performance.now() - start)) / 1000));
+    nextEl.textContent = last
+      ? (left > 0 ? "printing in " + left : "printing…")
+      : (left > 0 ? "next photo in " + left : "get ready…");
+  };
+  tick();
+  const timer = setInterval(tick, 250);
+
+  await sleep(total);
+  clearInterval(timer);
+  el.classList.remove("show");
+  await sleep(280);                     // let it fade before the next cue
+  img.removeAttribute("src");
 }
 
 const CUES = ["get ready", "again &#9825;", "last one &#9825;"];
