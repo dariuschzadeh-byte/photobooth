@@ -53,13 +53,22 @@ if exist "%HFDIR%" (
 echo   [3/4] starting it again...
 start "" "%HFP%"
 
-echo   [4/4] waiting for it to find the printer...
+REM  Give it real time. Hot Folder Print shows a splash screen while it
+REM  scans for printers, and that alone can take a couple of minutes on
+REM  this machine -- the first version of this script waited 30 seconds
+REM  and declared failure while HFP was still starting up, which is worse
+REM  than not checking at all.
+echo   [4/4] waiting for it to find the printer - this takes a while.
+echo         Leave the Hot Folder Print window alone while it starts.
+echo.
 set TRIES=0
 :wait
-ping -n 3 127.0.0.1 >nul
+ping -n 6 127.0.0.1 >nul
 set /a TRIES+=1
 if exist "%HFDIR%" goto found
-if !TRIES! GEQ 10 goto notfound
+set /a SECS=!TRIES!*5
+echo         still waiting... !SECS!s
+if !TRIES! GEQ 48 goto notfound
 goto wait
 
 :found
