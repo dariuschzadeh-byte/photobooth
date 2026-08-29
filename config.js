@@ -155,9 +155,11 @@ module.exports = {
       // pushing red up -- see the note in src/strip.js. At 0.25 light skin
       // moves from red-minus-blue 40 to 89 and drops 19 in brightness --
       // a clear tan. Past about 0.40 it reads orange rather than tanned.
-      // Pulled back from 0.25: on paper the strips read orange rather
-      // than tanned. Skin still warms clearly, the backdrop keeps its pink.
-      warmth: 0.17,
+      // 0. The strips the owner keeps as the reference were printed before
+      // this dial existed, so any value at all moves away from them. Kept
+      // in place because TRY-LOOK can still explore it -- but the default
+      // has to be the reference, not a preference.
+      warmth: 0,
 
       // How the warmth is spread across the tonal range, as a fraction of
       // full white. Below `warmthFloor` nothing is warmed at all; above
@@ -192,16 +194,12 @@ module.exports = {
       // on a tenth of the pixels, invisible in dye-sub). 0.03-0.06 is a
       // gentle but real lift -- set it while looking at an actual photo.
       shadowLift: 0,
-      // Above 1 now, not below. 0.98 was set to tame an overexposed frame
-      // and it flattened everything; with the exposure fixed at the camera
-      // it was just making prints look washed out.
-      contrast: 1.06,
+      // Back to the reference value. 1.06 was a reasonable guess at "more
+      // contrast" and it is not what made the strips the owner likes.
+      contrast: 0.98,
       sharpRadius: 2,
-      // Doubled. 0.07 was chosen when prints were blown out and any
-      // sharpening made the highlights crunchy. Correctly exposed, the
-      // strips just looked soft. Still gentle -- this is a photobooth,
-      // not a passport photo.
-      sharpAmount: 0.16,
+      // Back to the reference value, same reason as contrast above.
+      sharpAmount: 0.07,
     },
 
     // Soft backdrop gradient -- bright centre, deeper pink toward the edges.
