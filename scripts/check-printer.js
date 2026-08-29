@@ -57,6 +57,32 @@ function freeSpaceGB(dir) {
   else if (hfpRunning === false) bad("NOT running - nothing in the hot folder will ever print. Start the booth again with icon 1.");
   else info("could not check (not Windows?)");
 
+  /* 1b -- does WINDOWS see the printer at all? ------------------------ */
+  //
+  // The decisive split. "Power" being lit only means the printer has
+  // electricity; it says nothing about whether the PC can reach it. If
+  // Windows lists the device, the fault is between Hot Folder Print and a
+  // printer that is present. If Windows does not, it is USB -- cable,
+  // port, or a device Windows suspended and never woke.
+  console.log("\n  1b. Does Windows see the printer?");
+  let winSees = null;
+  try {
+    const ps = 'Get-Printer | Where-Object { $_.Name -match \'DP-|DS-RX|DNP|CITIZEN\' } | ' +
+               'ForEach-Object { $_.Name + \'  |  \' + $_.PrinterStatus }';
+    const out = execSync('powershell -NoProfile -Command "' + ps + '"', { encoding: "utf8", timeout: 20000 }).trim();
+    if (out) { winSees = true; out.split(/\r?\n/).forEach(l => info(l.trim())); ok("Windows lists the printer"); }
+    else { winSees = false; bad("Windows lists NO DNP printer - this is a USB or driver problem, not Hot Folder Print."); }
+  } catch (e) { info("could not check (" + String(e.message).split("\n")[0].slice(0, 60) + ")"); }
+
+  // And is it attached as a USB device, regardless of the print queue?
+  try {
+    const ps = 'Get-PnpDevice -PresentOnly | Where-Object { $_.FriendlyName -match \'DP-|DS-RX|DNP|CITIZEN\' } | ' +
+               'ForEach-Object { $_.Status + \'  \' + $_.FriendlyName }';
+    const out = execSync('powershell -NoProfile -Command "' + ps + '"', { encoding: "utf8", timeout: 20000 }).trim();
+    if (out) out.split(/\r?\n/).forEach(l => info("USB: " + l.trim()));
+    else if (winSees === false) info("USB: nothing attached either - the PC cannot see the hardware at all.");
+  } catch (e) {}
+
   /* 2 -- the printer's own status file ------------------------------- */
   console.log("\n  2. What the printer reports");
   try {
