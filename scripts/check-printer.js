@@ -23,7 +23,11 @@ const DNP_STATUS = "C:\\DNP\\HotFolderPrint\\Logs\\printer_status.txt";
 const HFP_EXE = "HotFolderPrint.exe";
 
 const ok = m => console.log("   OK    " + m);
-const bad = m => { console.log("   FAULT " + m); problems.push(m); };
+let countFaults = true;
+const bad = m => {
+  console.log((countFaults ? "   FAULT " : "   note  ") + m);
+  if (countFaults) problems.push(m);
+};
 const info = m => console.log("         " + m);
 const problems = [];
 
@@ -46,7 +50,16 @@ function freeSpaceGB(dir) {
 (async () => {
   console.log("\n  fr-anz photobooth - printer check\n");
 
+  const mode = (config.printer && config.printer.mode) || "hotfolder";
+  const viaWindows = mode !== "hotfolder";
+  if (viaWindows) {
+    console.log("  The booth prints straight through Windows (mode: " + mode + "),");
+    console.log("  not through Hot Folder Print. Sections 1 to 3 are shown for");
+    console.log("  information only and are not faults while this is the case.\n");
+  }
+
   /* 1 -- is Hot Folder Print running at all? ------------------------- */
+  countFaults = !viaWindows;   // its state is irrelevant when unused
   console.log("  1. Hot Folder Print");
   let hfpRunning = null;
   try {
@@ -166,6 +179,8 @@ function freeSpaceGB(dir) {
   } catch (e) {
     info("no log folder found at " + LOGDIR);
   }
+
+  countFaults = true;   // back to real faults from here
 
   /* 4 -- disk space -------------------------------------------------- */
   console.log("\n  4. Disk space");

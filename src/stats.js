@@ -71,6 +71,12 @@ function printer() {
  * it, so anything older than a couple of minutes was never picked up.
  */
 function hotFolder() {
+  // Not in use when printing goes straight through Windows. Reporting the
+  // folder as missing would be true and useless -- it would raise a
+  // critical alert about a route the booth is deliberately not taking.
+  if (config.printer && config.printer.mode !== "hotfolder") {
+    return { exists: true, waiting: 0, oldestMinutes: null, stuck: false, notInUse: true };
+  }
   const dir = config.printer && config.printer.hotFolder;
   if (!dir) return { exists: false, waiting: 0, oldestMinutes: null, stuck: false };
   try {
@@ -268,22 +274,27 @@ function buildAlerts({ pr, hf, capacity, codeStats, evs7 }) {
   const a = [];
   const add = (severity, key, title, detail) => a.push({ severity, key, title, detail });
 
+  // The printer status file is written by Hot Folder Print. With printing
+  // routed straight through Windows there is nobody writing it, so its
+  // absence says nothing about the printer and must not raise an alarm.
+  const usingHotFolder = !config.printer || config.printer.mode === "hotfolder";
+
   if (hf.stuck) {
     add("critical", "hotfolder_stuck",
       `${hf.waiting} strip(s) stuck in the hot folder`,
       `The oldest has been waiting ${hf.oldestMinutes} minutes. DNP Hot Folder Print is almost certainly not running — ` +
       `the booth looks healthy and prints are going nowhere. Start it, or run START-BOOTH.bat again.`);
   }
-  if (pr.found && pr.statusAgeMinutes !== null && pr.statusAgeMinutes > 15) {
+  if (usingHotFolder && pr.found && pr.statusAgeMinutes !== null && pr.statusAgeMinutes > 15) {
     add("critical", "printer_status_stale",
       `Printer status has not updated in ${pr.statusAgeMinutes} min`,
       "Hot Folder Print writes this file continuously. It stopping means HFP stopped.");
   }
-  if (!pr.found) {
+  if (!pr.found && usingHotFolder) {
     add("critical", "printer_offline",
       "No printer status file",
       "The printer is switched off or unplugged, or Hot Folder Print was never started.");
-  } else if (!pr.online) {
+  } else if (pr.found && !pr.online) {
     add("critical", "printer_error", `Printer reports ${pr.status}`, `Model ${pr.model}.`);
   }
 

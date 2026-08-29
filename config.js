@@ -246,9 +246,15 @@ module.exports = {
     //               while Windows reported the printer perfectly ready.
     //               Test it first with TRY-DIRECT-PRINT.bat, then set the
     //               paper size that came out right.
-    mode: "hotfolder",
+    // Switched to "windows" on 29 Aug 2026, after Hot Folder Print stopped
+    // working entirely -- no log written since the 26th, splash screen
+    // hanging forever -- while Windows reported the printer Idle the whole
+    // time. Verified on paper: two clean strips, correct cut, correct
+    // orientation, footer intact. Switch back to "hotfolder" once HFP has
+    // been reinstalled and CHECK-PRINTER shows its folder again.
+    mode: "windows",
     windowsPrinter: "DS-RX1",
-    windowsPaperSize: "",        // empty = the printer's default
+    windowsPaperSize: "PR (4x6) x 2",   // the 2 inch cut: one sheet, two strips
     hotFolder: "C:\\DNP\\HotFolderPrint\\Prints\\s6x2_2",
     copies: 1,
   },
