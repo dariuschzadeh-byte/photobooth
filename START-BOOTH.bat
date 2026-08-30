@@ -52,7 +52,17 @@ REM  DNP Hot Folder Print is what actually prints. Without it the booth
 REM  works perfectly but nothing ever comes out of the printer - the
 REM  strips just pile up in the hot folder. It does not install itself
 REM  into autostart, so we start it here.
-call :starthfp
+REM  Only when the booth actually prints through it. Since printing moved
+REM  straight to Windows, starting Hot Folder Print just put a splash
+REM  screen in front of the guest screen that somebody had to click away
+REM  on every single start.
+set "PRINTMODE=hotfolder"
+for /f "usebackq delims=" %%m in (`node -e "try{process.stdout.write(String(require('./config').printer.mode||'hotfolder'))}catch(e){process.stdout.write('hotfolder')}"`) do set "PRINTMODE=%%m"
+if /i "%PRINTMODE%"=="hotfolder" (
+  call :starthfp
+) else (
+  echo   printing goes straight to Windows - Hot Folder Print not needed
+)
 
 REM ---- start the server in its own minimized window -------------------
 start "fr-anz server (do not close)" /min cmd /c ""%~dp0_server-loop.bat""
