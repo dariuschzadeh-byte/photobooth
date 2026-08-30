@@ -174,7 +174,7 @@ module.exports = {
       // Skin is untouched at any value here: measured identical at 0.00
       // and at 0.80, because the gate keys on the one number that
       // separates a face from that wall.
-      magenta: 0.17,
+      magenta: 0.08,
 
       // How the warmth is spread across the tonal range, as a fraction of
       // full white. Below `warmthFloor` nothing is warmed at all; above
@@ -200,9 +200,10 @@ module.exports = {
       warmthSkinLo: 0,
       warmthSkinHi: 12,
 
-      // Just above 1. 0.94 muted the colour we are trying to bring back;
-      // 1.12 printed garish. The reference glows, it does not shout.
-      sat: 1.03,
+      // 0.94 printed flat, 1.12 printed garish, 1.03 still pushed the wall.
+      // Barely above neutral now -- the glow is meant to come from the
+      // light, not from the saturation slider.
+      sat: 0.98,
 
       // Fraction of the full range added to the darkest areas. This stood
       // at 0.22 and never lifted anything: the code treated it as raw
@@ -237,7 +238,7 @@ module.exports = {
       // wall lit from the centre and going cold where the light thins out.
       // Rides the same distance as the vignette and the same wall gate as
       // grade.magenta, so it never lands on an arm near the frame edge.
-      coolEdges: 0.10,
+      coolEdges: 0.06,
 
       satBoost: 0.0,
       headBias: 0.42,
