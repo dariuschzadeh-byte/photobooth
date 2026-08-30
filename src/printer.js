@@ -70,7 +70,13 @@ async function printStrip(stripPath) {
         const out = String(stdout || "") + String(stderr || "");
         if (err) return reject(new Error("Windows print failed: " + (out.trim() || err.message)));
         if (/not found/i.test(out)) return reject(new Error(out.trim()));
-        resolve({ printed: true, via: "windows", detail: out.trim().slice(0, 200) });
+        /* "printed" here means Windows accepted the job, not that paper
+         * came out. With Hot Folder Print bypassed there is no media
+         * counter left, so an empty roll is invisible: the job queues,
+         * this resolves, the booth says printing, and nothing appears.
+         * Passing the queue state back at least puts it in the event log,
+         * where CHECK-PRINTER and the dashboard can find it. */
+        resolve({ printed: true, via: "windows", queued: true, detail: out.trim().slice(0, 200) });
       });
     });
   }

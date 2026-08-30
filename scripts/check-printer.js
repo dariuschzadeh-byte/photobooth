@@ -182,6 +182,46 @@ function freeSpaceGB(dir) {
 
   countFaults = true;   // back to real faults from here
 
+  /* 3c -- the Windows print queue ------------------------------------ */
+  //
+  // Since printing was routed away from Hot Folder Print this is the only
+  // place the truth lives. HFP's status file is stale and its media count
+  // with it, so an empty paper roll is now invisible to the booth: the job
+  // goes to Windows, the booth reports success, and nothing comes out.
+  // Whatever went wrong ends up here as a stuck job or a printer state.
+  if (viaWindows) {
+    console.log("\n  3c. The Windows print queue");
+    const name = (config.printer && config.printer.windowsPrinter) || "DS-RX1";
+    try {
+      const ps = "$p = Get-Printer -Name '*" + name + "*' -ErrorAction SilentlyContinue | Select-Object -First 1; " +
+                 "if ($p) { 'STATUS ' + $p.PrinterStatus + ' | ' + $p.Name } else { 'STATUS none' }; " +
+                 "$j = Get-PrintJob -PrinterName $p.Name -ErrorAction SilentlyContinue; " +
+                 "if ($j) { $j | ForEach-Object { 'JOB ' + $_.JobStatus + ' | ' + $_.DocumentName + ' | submitted ' + $_.SubmittedTime } } else { 'JOB none' }";
+      const out = execSync('powershell -NoProfile -Command "' + ps + '"', { encoding: "utf8", timeout: 25000 }).trim();
+      let jobs = 0;
+      for (const line of out.split(/\r?\n/).map(l => l.trim()).filter(Boolean)) {
+        if (line.startsWith("STATUS none")) { bad("Windows does not list the printer any more."); continue; }
+        if (line.startsWith("STATUS ")) {
+          const st = line.slice(7);
+          info("printer: " + st);
+          if (/Offline|Error|PaperOut|PaperJam|DoorOpen|NotAvailable/i.test(st)) bad("Windows reports the printer as " + st.split(" | ")[0]);
+          continue;
+        }
+        if (line.startsWith("JOB none")) { ok("queue is empty - nothing is stuck"); continue; }
+        if (line.startsWith("JOB ")) {
+          jobs++;
+          info("stuck job: " + line.slice(4));
+        }
+      }
+      if (jobs) bad(jobs + " job(s) sitting in the queue - they were sent but never printed. Usually paper, ribbon, or an open cover.");
+    } catch (e) {
+      info("could not read the queue (" + String(e.message).split("\n")[0].slice(0, 60) + ")");
+    }
+
+    console.log("\n  NOTE: with Hot Folder Print bypassed there is no media counter.");
+    console.log("        Check the paper and ribbon by eye -- the software cannot.");
+  }
+
   /* 4 -- disk space -------------------------------------------------- */
   console.log("\n  4. Disk space");
   const gb = freeSpaceGB(config.paths.output);
