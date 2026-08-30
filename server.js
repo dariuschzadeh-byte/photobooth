@@ -260,6 +260,25 @@ app.get("/api/health", (req, res) => {
 //    (master code always works and is never burned -- handled inside codes.js)
 app.post("/api/validate", (req, res) => {
   const code = (req.body && req.body.code || "").toString();
+
+  /* Do not take a voucher we cannot honour.
+   *
+   * The printer was simply switched off, and the booth ran the whole
+   * session anyway: three photos, "printing your strip", nothing. A guest
+   * would have burned their card for a blank wait. The check belongs here,
+   * before the code is spent, not after.
+   *
+   * Only refuses on a definite negative. A watcher that has not answered
+   * yet, or is not running at all, means nobody has looked -- and a booth
+   * that turns guests away because it is unsure is worse than one that
+   * tries. */
+  const pw = printerwatch.status();
+  if (pw && pw.ok === false) {
+    console.warn(`[printer] refusing a session: Windows reports "${pw.status}"`);
+    events.log("session_refused", { reason: "printer_unavailable", status: pw.status });
+    return res.json({ status: "printer_down" });
+  }
+
   const result = codes.validateAndRedeem(code);
 
   if (!result.valid) {
