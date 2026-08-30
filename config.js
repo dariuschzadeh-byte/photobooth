@@ -157,11 +157,26 @@ module.exports = {
       // pushing red up -- see the note in src/strip.js. At 0.25 light skin
       // moves from red-minus-blue 40 to 89 and drops 19 in brightness --
       // a clear tan. Past about 0.40 it reads orange rather than tanned.
-      // 0. The strips the owner keeps as the reference were printed before
-      // this dial existed, so any value at all moves away from them. Kept
-      // in place because TRY-LOOK can still explore it -- but the default
-      // has to be the reference, not a preference.
-      warmth: 0,
+      // 0.22. Asked for: light skin a little browner and a little darker,
+      // dark skin left alone -- guests here should not come out looking
+      // darker than they walked in.
+      //
+      // That split is the whole reason the ramp below exists, and it is
+      // measured rather than hoped for. Through the camera's own cast, at
+      // 0.22:
+      //
+      //   very light   brightness -8.9   red-minus-blue  79 -> 115
+      //   light                   -7.6                   87 -> 117
+      //   mid                     -2.3                   85 ->  93
+      //   tanned                  -0.7                   77 ->  78
+      //   dark                     0.0                   58 ->  58
+      //   very dark                0.0                   41 ->  41
+      //
+      // The two darkest rows are untouched, not nearly untouched: the ramp
+      // floor sits above where they land, so the dial cannot reach them.
+      // Raising warmthFloor moves that cutoff lighter. Past about 0.40 on
+      // warmth itself, light skin reads orange rather than tanned.
+      warmth: 0.22,
 
       // The backdrop's hue: 0 leaves it as photographed, higher pushes it
       // from salmon towards the luminous violet-pink of the reference
@@ -270,6 +285,20 @@ module.exports = {
       // depth. Measured on the wall patch: corner saturation rises by
       // about a quarter, a white shirt by under 2 percent.
       satBoost: 0.26,
+
+      // 0.85. The falloff used to be measured from the centre in both
+      // directions at once, which is a circle -- and it read as a circle:
+      // a lit disc around the head rather than light on a wall. This runs
+      // it sideways instead. Bright down the middle where the person
+      // stands, deepening towards the left and right edges, which is where
+      // the wall is actually in shot. 0 is the old circle, 1 is purely
+      // sideways; 0.85 keeps a trace of the vertical so the top corners
+      // still settle rather than ending in a hard band.
+      sideBias: 0.85,
+
+      // Where the bright part sits vertically. Nearly inert at a high
+      // sideBias, which is rather the point -- the bright spot above the
+      // head was half of what made the circle read as a circle.
       headBias: 0.42,
       // 1.4, from 1.8. A lower power starts the falloff earlier, so the
       // gradient reads across the whole frame rather than only in the
@@ -277,8 +306,28 @@ module.exports = {
       falloff: 1.4,
     },
 
-    sheetOuterMarginMM: 0,
-    sheetGutterMM: 0,
+    /* Where the blade really cuts the sheet in two.
+     *
+     * The two halves of a sheet are the same block written twice, pixel
+     * for pixel, so twins that come off the printer framed differently
+     * were never the software -- the cut is not landing in the middle, and
+     * whichever strip sits on the short side loses a slice of wall.
+     *
+     * Measure it with a ruler: the width of the LEFT strip minus the width
+     * of the right, in millimetres. Positive when the left one is wider.
+     * A strip is 50 mm, so half a millimetre already shows, and past about
+     * 3 mm it is worth having the printer looked at rather than corrected
+     * here.
+     *
+     * The block is built wider by exactly what gets eaten and its middle
+     * is used, so nobody is moved off centre and no cream edge appears.
+     * 0 lays the sheet out exactly as before -- verified bit for bit,
+     * 0 differing channels out of 8,640,000.
+     *
+     * Replaces two settings that sat here looking like this one and were
+     * read by nothing at all.
+     */
+    cutOffsetMM: 0,
   },
 
   camera: {

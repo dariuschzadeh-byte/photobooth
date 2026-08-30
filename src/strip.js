@@ -230,13 +230,23 @@ function backdropGradient(img){
   const w=img.bitmap.width, h=img.bitmap.height;
   const cx=w/2, cy=h*S.backdrop.headBias;
   const str=S.backdrop.strength, satb=S.backdrop.satBoost, p=S.backdrop.falloff;
+  /* How much of the falloff runs sideways.
+   *
+   * 0 measures distance from the centre in both directions at once, which
+   * draws a circle -- a bright disc around the head with everything else
+   * dimmed, and that circle is visible as a circle rather than as light.
+   * 1 measures the horizontal distance only: bright down the middle where
+   * the person stands, deepening towards the left and right edges where
+   * the wall is actually in shot. In between mixes the two. */
+  const side = S.backdrop.sideBias == null ? 0 : S.backdrop.sideBias;
+  const vert = 1 - (side < 0 ? 0 : side > 1 ? 1 : side);
   const cool = S.backdrop.coolEdges == null ? 0 : S.backdrop.coolEdges;
   const gate = S.grade && S.grade.warmthSkinOnly !== false;
   const glo = S.grade && S.grade.warmthSkinLo != null ? S.grade.warmthSkinLo : 0;
   const ghi = S.grade && S.grade.warmthSkinHi != null ? S.grade.warmthSkinHi : 12;
 
   img.scan(0,0,w,h,function(x,y,idx){
-    let dx=(x-cx)/(w/2), dy=(y-cy)/(h/2);
+    let dx=(x-cx)/(w/2), dy=((y-cy)/(h/2))*vert;
     let d=Math.sqrt(dx*dx+dy*dy); if(d>1)d=1;
     const m=Math.pow(d,p), fac=1-str*m;
     let r=this.bitmap.data[idx]*fac, gr=this.bitmap.data[idx+1]*fac, b=this.bitmap.data[idx+2]*fac;
@@ -304,12 +314,43 @@ async function buildStripBlock(photoPaths, blockW){
   return block;
 }
 
-/* ---- full sheet: two identical strips, full-bleed, centre cut between them ---- */
+/* Put a block into one cut piece of the sheet, centred on that piece.
+ *
+ * The block is built wider than a strip when the blade is off centre, so
+ * there is material to give away on the side that gets eaten. Taking the
+ * middle window of it keeps whoever is standing there in the middle of
+ * the strip they end up holding. */
+function placeInPiece(sheet, block, x0, pieceW){
+  const bw = block.bitmap.width;
+  const sx = Math.round((bw - pieceW) / 2);
+  if (sx >= 0) {
+    sheet.composite(block.clone().crop(sx, 0, Math.min(pieceW, bw - sx), H), x0, 0);
+  } else {
+    // Narrower than the piece: centre it and let the paper show. Only
+    // reachable if someone sets a negative bleed by hand.
+    sheet.composite(block, x0 + Math.round((pieceW - bw) / 2), 0);
+  }
+}
+
+/* ---- full sheet: two identical strips, full-bleed, cut between them ----
+ *
+ * Both halves have always been the same block written twice, so a strip
+ * that comes off the printer framed differently from its twin is never
+ * the software -- it is the blade landing somewhere other than the middle
+ * of the sheet. cutOffsetMM says where it really lands and the halves are
+ * laid out around that instead of around the nominal centre.
+ */
 async function buildStrip(photoPaths, outPath){
-  const block=await buildStripBlock(photoPaths, STRIP_W);
-  const sheet=new Jimp(SHEET_W, H, rgba(S.paper));
-  sheet.composite(block, 0, 0);          // left strip
-  sheet.composite(block, STRIP_W, 0);    // right strip
+  const mm = S.cutOffsetMM || 0;
+  // Measured as the width difference between the two cut strips, so the
+  // seam itself sits half of that off centre.
+  const k = Math.round((mm * DPI / 25.4) / 2);
+  const bleed = 2 * Math.abs(k);
+  const block = await buildStripBlock(photoPaths, STRIP_W + bleed);
+  const sheet = new Jimp(SHEET_W, H, rgba(S.paper));
+  const cut = STRIP_W + k;                       // where the blade lands
+  placeInPiece(sheet, block, 0,   cut);          // left piece
+  placeInPiece(sheet, block, cut, SHEET_W - cut);// right piece
   sheet.quality(95);
   await sheet.writeAsync(outPath);
   return outPath;

@@ -102,7 +102,10 @@ async function frame(w, h, pose) {
   console.log("  Built with the settings that are in config.js right now:");
   console.log(`    brightness  ${S.tone.exposure}`);
   console.log(`    gradient    ${S.backdrop.strength}   depth ${S.backdrop.satBoost}   falloff ${S.backdrop.falloff}`);
+  console.log(`    shape       ${S.backdrop.sideBias}  (0 = circle, 1 = sideways only)`);
+  console.log(`    tan         ${S.grade.warmth}  on light skin only, ramp ${S.grade.warmthFloor}-${S.grade.warmthFull}`);
   console.log(`    magenta     ${S.grade.magenta}   cool edges ${S.backdrop.coolEdges}`);
+  console.log(`    cut offset  ${S.cutOffsetMM} mm`);
   console.log("\n  The three frames are a mock, not a photograph -- judge the");
   console.log("  wall, the gradient and the corners by it, never skin tone.\n");
 })().catch(e => { console.error("  Failed: " + e.message); process.exit(1); });
