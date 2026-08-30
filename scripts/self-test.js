@@ -118,6 +118,50 @@ const check = (name, fn) => {
     } catch (e) { console.log("  FAIL  building a strip\n        " + e.message); throw e; }
   })();
 
+  /* The look-matcher has to be able to recover settings it did not see.
+     Its first version could not: it matched one colour, reported numbers
+     that were all wrong, and looked confident doing it. */
+  await (async () => {
+    try {
+      const { execFileSync } = require("child_process");
+      const Jimp = require("jimp");
+      const cfg = require("../config");
+      const pool = fs.readdirSync(cfg.paths.testPhotos)
+        .filter(f => /\.(jpe?g|png)$/i.test(f)).sort()
+        .map(f => path.join(cfg.paths.testPhotos, f));
+
+      const sess = path.join(cfg.paths.sessions, "selftest");
+      fs.mkdirSync(sess, { recursive: true });
+      pool.slice(0, 3).forEach((src, i) => fs.copyFileSync(src, path.join(sess, `photo_${i + 1}.jpg`)));
+
+      const TRUE = { magenta: 0.30, sat: 1.10, exposure: 0.95 };
+      const keep = { m: cfg.strip.grade.magenta, s: cfg.strip.grade.sat, e: cfg.strip.tone.exposure };
+      cfg.strip.grade.magenta = TRUE.magenta;
+      cfg.strip.grade.sat = TRUE.sat;
+      cfg.strip.tone.exposure = TRUE.exposure;
+      const ref = path.join(os.tmpdir(), "selftest-ref-" + Date.now() + ".png");
+      await buildStrip(pool.slice(0, 3), ref);
+      cfg.strip.grade.magenta = keep.m; cfg.strip.grade.sat = keep.s; cfg.strip.tone.exposure = keep.e;
+
+      const out = execFileSync(process.execPath,
+        [path.join(__dirname, "match-look.js"), ref, sess], { encoding: "utf8" });
+      const num = k => Number((out.match(new RegExp(k + "\\s*:\\s*([\\d.]+)")) || [])[1]);
+      const got = { magenta: num("magenta"), sat: num("sat"), exposure: num("exposure") };
+
+      for (const k of Object.keys(TRUE)) {
+        assert(Math.abs(got[k] - TRUE[k]) <= 0.06,
+          `${k}: recovered ${got[k]}, built with ${TRUE[k]}`);
+      }
+      fs.rmSync(ref, { force: true });
+      fs.rmSync(sess, { recursive: true, force: true });
+      console.log("  ok    the look-matcher recovers settings it was not told");
+      passed++;
+    } catch (e) {
+      console.log("  FAIL  the look-matcher\n        " + e.message);
+      throw e;
+    }
+  })();
+
   console.log("\n  " + passed + " checks passed. The software side is healthy.");
   console.log("  (This says nothing about the camera or printer -- use CHECK-PRINTER for those.)\n");
 })()
