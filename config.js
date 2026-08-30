@@ -99,7 +99,9 @@ module.exports = {
       // twentieth of a stop down, 0.85 clearly darker. It changes only
       // brightness and never colour, so the look stays put.
       enabled: true,
-      exposure: 1.00,
+      // 0.94. Asked for directly -- the prints read pale next to the
+      // reference. Brightness only, never colour, so the look stays put.
+      exposure: 0.94,
       highlightKnee: 0.72,
       highlightRolloff: 0,
     },
@@ -174,7 +176,17 @@ module.exports = {
       // Skin is untouched at any value here: measured identical at 0.00
       // and at 0.80, because the gate keys on the one number that
       // separates a face from that wall.
-      magenta: 0.08,
+      //
+      // Back to 0. Two reasons, both checked rather than felt. The strips
+      // kept as the reference have no violet lean at all -- the wall there
+      // is a deep warm rose. And the gate that is meant to hold this to
+      // the wall does not: light clothing sits at green-minus-blue +3,
+      // which the gate reads as three-quarters wall, so a white shirt got
+      // its blue pushed up and its green pulled down along with it. The
+      // depth this was reaching for now comes from backdrop.satBoost,
+      // which turns around whatever hue is already there and so leaves
+      // near-neutral cloth alone.
+      magenta: 0,
 
       // How the warmth is spread across the tonal range, as a fraction of
       // full white. Below `warmthFloor` nothing is warmed at all; above
@@ -232,17 +244,37 @@ module.exports = {
     // flat rather than clean.
     backdrop: {
       enabled: true,
-      strength: 0.18,         // lower = lighter, more even background (was 0.20)
+      // 0.42, up from 0.18. At 0.18 the falloff was barely visible and the
+      // wall printed as one flat sheet of pink. The reference strips have
+      // an obvious bright centre going deep towards the corners, and that
+      // gradient is most of what separates them from a snapshot.
+      strength: 0.42,
 
       // Warm pink in the middle, drifting almost blue at the edges -- the
       // wall lit from the centre and going cold where the light thins out.
       // Rides the same distance as the vignette and the same wall gate as
       // grade.magenta, so it never lands on an arm near the frame edge.
-      coolEdges: 0.06,
+      // 0. The corners in the reference are not cold -- they are a deeper,
+      // warmer rose than the centre, which is the opposite of what this
+      // does. It also rides the same wall gate as grade.magenta did, so it
+      // carried the same fault: light clothing near the frame edge picked
+      // up the blue. Turning it negative was tried and is worse -- it
+      // sends a white shirt sage green. Left in place at 0 so TRY-COLOUR
+      // can still reach it.
+      coolEdges: 0,
 
-      satBoost: 0.0,
+      // 0.26. This is what makes the corners go deep instead of grey.
+      // Saturation turns around the hue that is already in the pixel, so
+      // a pink wall gets more pink while near-neutral cloth barely moves
+      // -- which is exactly why it, and not magenta, is the right dial for
+      // depth. Measured on the wall patch: corner saturation rises by
+      // about a quarter, a white shirt by under 2 percent.
+      satBoost: 0.26,
       headBias: 0.42,
-      falloff: 1.8,
+      // 1.4, from 1.8. A lower power starts the falloff earlier, so the
+      // gradient reads across the whole frame rather than only in the
+      // last corner.
+      falloff: 1.4,
     },
 
     sheetOuterMarginMM: 0,

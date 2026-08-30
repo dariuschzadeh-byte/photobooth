@@ -1,16 +1,18 @@
 /* =====================================================================
-   Nine versions of the same photo: the backdrop's hue across, how vivid
-   it is down. Pick one, name the two numbers, done.
+   Nine versions of the same photo: how far the backdrop falls away
+   across, how deep the corners go down. Pick one, name the two numbers,
+   done.
 
-   For the complaint that the wall comes out a dull salmon while the
-   strips kept as the reference are a luminous pink leaning violet. The
-   grade is already bit-identical to the one those strips were printed
-   with, so what is left is the wall itself -- repainted matte, and quite
-   possibly from a different tin. This corrects it back.
+   This grid used to sweep magenta against saturation. That was the wrong
+   pair. magenta pushed the wall's blue up, and the gate meant to hold it
+   to the wall reads light clothing as three-quarters wall -- so it tinted
+   shirts as much as it tinted the backdrop. It now sits at 0.
 
-   The hue shift rides the inverse of the skin gate: it moves the wall and
-   leaves faces alone. Watch the faces anyway while choosing -- if they go
-   purple, the value is too high.
+   What the reference strips actually have, and what these two dials
+   reach, is a bright centre falling away to a deeper, warmer rose at the
+   corners. `strength` is how far it falls; `satBoost` is whether the
+   corner goes rich or grey on the way down. Both turn around whatever
+   colour is already in the pixel, so neither of them stains cloth.
 
    Usage:
      node scripts/try-color.js                  newest session
@@ -25,12 +27,10 @@ const Jimp = require("jimp");
 const config = require("../config");
 const { toneStage, flashGrade, backdropGradient } = require("../src/strip");
 
-// Centred on the answer now that both ends have been seen on paper: 0
-// printed too salmon, 0.50 printed hot pink. A grid is only useful once
-// it brackets the target closely -- too wide and every square is wrong in
-// a different direction.
-const MAGENTAS = [0.10, 0.17, 0.26];   // gentle -> clear violet lean, across
-const SATS     = [0.98, 1.03, 1.10];   // natural -> more glow, down
+// Bracketed around the value now in config.js rather than spread wide: a
+// grid is only worth printing once it already contains the answer.
+const STRENGTHS = [0.30, 0.42, 0.54];   // gentle -> strong falloff, across
+const DEPTHS    = [0.14, 0.26, 0.38];   // corner richness, down
 
 function newestSession() {
   try {
@@ -59,54 +59,55 @@ function newestSession() {
   const outDir = path.join(config.paths.output, "analysis");
   fs.mkdirSync(outDir, { recursive: true });
 
+  const B = config.strip.backdrop;
   console.log("\n  session: " + path.basename(dir) + "   photo: " + path.basename(src));
-  console.log("  current: magenta " + (config.strip.grade.magenta || 0) +
-              ", sat " + config.strip.grade.sat + "\n");
+  console.log("  current: gradient " + B.strength + ", depth " + B.satBoost + "\n");
 
   const CELL_W = 380, pad = 10, labelH = 22, rowLabel = 92;
   const base = await Jimp.read(src);
   const cellH = Math.round(CELL_W * base.bitmap.height / base.bitmap.width);
 
   const sheet = new Jimp(
-    rowLabel + MAGENTAS.length * (CELL_W + pad) + pad,
-    labelH + SATS.length * (cellH + pad) + pad,
+    rowLabel + STRENGTHS.length * (CELL_W + pad) + pad,
+    labelH + DEPTHS.length * (cellH + pad) + pad,
     0xffffffff,
   );
   const font = await Jimp.loadFont(Jimp.FONT_SANS_16_BLACK);
 
   // Put the live settings back no matter what happens.
-  const wasMag = config.strip.grade.magenta || 0;
-  const wasSat = config.strip.grade.sat;
+  const wasStr = B.strength;
+  const wasSat = B.satBoost;
 
   try {
-    for (let c = 0; c < MAGENTAS.length; c++) {
+    for (let c = 0; c < STRENGTHS.length; c++) {
       sheet.print(font, rowLabel + c * (CELL_W + pad), 2,
-        "magenta " + MAGENTAS[c].toFixed(2) + (MAGENTAS[c] === wasMag ? "  (now)" : ""));
+        "gradient " + STRENGTHS[c].toFixed(2) + (STRENGTHS[c] === wasStr ? "  (now)" : ""));
     }
-    for (let r = 0; r < SATS.length; r++) {
+    for (let r = 0; r < DEPTHS.length; r++) {
       const y = labelH + r * (cellH + pad);
       sheet.print(font, 4, y + Math.round(cellH / 2) - 8,
-        "vivid\n" + SATS[r].toFixed(2) + (SATS[r] === wasSat ? " (now)" : ""));
-      for (let c = 0; c < MAGENTAS.length; c++) {
-        config.strip.grade.sat = SATS[r];
-        config.strip.grade.magenta = MAGENTAS[c];
+        "depth\n" + DEPTHS[r].toFixed(2) + (DEPTHS[r] === wasSat ? " (now)" : ""));
+      for (let c = 0; c < STRENGTHS.length; c++) {
+        B.strength = STRENGTHS[c];
+        B.satBoost = DEPTHS[r];
         const img = base.clone();
         toneStage(img); flashGrade(img); backdropGradient(img);
         img.resize(CELL_W, cellH);
         sheet.composite(img, rowLabel + c * (CELL_W + pad), y);
       }
-      console.log("  rendered vividness " + SATS[r].toFixed(2));
+      console.log("  rendered depth " + DEPTHS[r].toFixed(2));
     }
   } finally {
-    config.strip.grade.sat = wasSat;
-    config.strip.grade.magenta = wasMag;
+    B.strength = wasStr;
+    B.satBoost = wasSat;
   }
 
   const out = path.join(outDir, "color-grid.png");
   await sheet.writeAsync(out);
 
   console.log("\n  " + out);
-  console.log("\n  Across = the wall towards violet pink. Down = more vivid.");
+  console.log("\n  Across = the backdrop falls away further from the centre.");
+  console.log("  Down   = the corners go richer rather than grey.");
   console.log("  Hold the reference strip next to the screen and match it.");
-  console.log("  Send both numbers -- e.g. \"magenta 0.10, vivid 1.06\".\n");
+  console.log("  Send both numbers -- e.g. \"gradient 0.42, depth 0.26\".\n");
 })().catch(e => { console.error("Failed: " + e.message); process.exit(1); });
