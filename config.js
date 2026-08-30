@@ -227,6 +227,45 @@ module.exports = {
       warmthSkinLo: 0,
       warmthSkinHi: 12,
 
+      /* Second half of the same question, and the half that was missing.
+       *
+       * Green-minus-blue cannot separate an arm from an olive t-shirt.
+       * Measured through this camera: skin 17, that shirt 23 -- the shirt
+       * reads as more skin than skin, so it got the tan meant for the
+       * person wearing it, and its folds and lit patches each got a
+       * different amount of it.
+       *
+       * How far red sits above green does separate them. Light skin 76,
+       * an olive shirt 23 to 38, a white shirt 50, the wall 87. Both
+       * tests have to pass now. warmthRedHi 0 asks only the old question.
+       */
+      warmthRedLo: 46,
+      warmthRedHi: 66,
+
+      /* How big a hole in the answer counts as a hole, as a fraction of
+       * the photo's width.
+       *
+       * A specular highlight -- a forehead or a nose catching the flash --
+       * washes towards the flash's own white. Green-minus-blue collapses
+       * there, so the test above decides it is not skin and leaves it pale
+       * while the face around it tans. That is the white patch.
+       *
+       * No per-pixel test can see past this: the pixel really has gone
+       * neutral. Blurring the answer was tried and traded one fault for
+       * another -- measured, it filled the highlight and dragged the wall
+       * into the edge of the face, taking the warmth there down to 5
+       * percent. A ring around the head instead of a patch inside it.
+       *
+       * So the hole is filled rather than smeared: spread the answer out
+       * by this radius, then pull it back in by the same amount. Holes
+       * smaller than the radius close; every real edge lands back exactly
+       * where it was. 0.025 of a 600px photo is 15px, which covers the
+       * highlights this flash makes at this distance.
+       *
+       * 0 goes back to deciding per pixel.
+       */
+      warmthGateHole: 0.025,
+
       // 0.94 printed flat, 1.12 printed garish, 1.03 still pushed the wall.
       // Barely above neutral now -- the glow is meant to come from the
       // light, not from the saturation slider.

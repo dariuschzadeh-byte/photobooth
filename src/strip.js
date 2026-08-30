@@ -81,6 +81,127 @@ function flashGrade(img){
   const skinOnly = g.warmthSkinOnly !== false;
   const skinLo = g.warmthSkinLo == null ? 0 : g.warmthSkinLo;
   const skinHi = g.warmthSkinHi == null ? 12 : g.warmthSkinHi;
+  const redLo  = g.warmthRedLo  == null ? 0 : g.warmthRedLo;
+  const redHi  = g.warmthRedHi  == null ? 0 : g.warmthRedHi;
+
+  /* ---- where the warmth is allowed to land -------------------------
+   *
+   * Both tests -- how bright is this, and is this skin -- were asked of
+   * single pixels, and a single pixel cannot answer either. Across one
+   * olive t-shirt the warmth landed anywhere between 6 and 24 percent
+   * depending on how a fold caught the light, which prints as patches of
+   * two different colours on the same shirt. A specular highlight goes
+   * the other way: it washes towards the flash's own white, green-minus-
+   * blue collapses, the gate decides it is not skin, and it stays pale
+   * while the face around it tans. That is the white patch on a forehead.
+   *
+   * Blurring the answer was the obvious repair and it is the wrong one:
+   * measured, it fixes the highlight but drags the wall into the edge of
+   * the face, dropping the warmth there to 5 percent -- a ring around the
+   * head, traded for the patch inside it.
+   *
+   * The highlight is a HOLE inside a region, so it gets filled rather
+   * than smeared: a morphological close (spread the mask out by the hole
+   * radius, then pull it back in by the same amount). Holes up to that
+   * size vanish; every real edge ends up exactly where it started. The
+   * short blur afterwards only takes the stair-steps off.
+   *
+   * warmthGateHole 0 goes back to deciding per pixel.
+   */
+  function span(src, w, h, radius, pick) {
+    // one separable pass, horizontal then vertical
+    const tmp = new Uint8Array(w * h), out = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let v = src[y * w + x];
+        const x0 = x - radius < 0 ? 0 : x - radius;
+        const x1 = x + radius >= w ? w - 1 : x + radius;
+        for (let i = x0; i <= x1; i++) v = pick(v, src[y * w + i]);
+        tmp[y * w + x] = v;
+      }
+    }
+    for (let x = 0; x < w; x++) {
+      for (let y = 0; y < h; y++) {
+        let v = tmp[y * w + x];
+        const y0 = y - radius < 0 ? 0 : y - radius;
+        const y1 = y + radius >= h ? h - 1 : y + radius;
+        for (let i = y0; i <= y1; i++) v = pick(v, tmp[i * w + x]);
+        out[y * w + x] = v;
+      }
+    }
+    return out;
+  }
+
+  /* A real box blur. span() folds a running value across the window,
+   * which is what max and min want and is emphatically not an average --
+   * folded pairwise it weights the last sample half, the one before it a
+   * quarter, and depends on which way the loop ran. */
+  function boxBlur(src, w, h, radius) {
+    const tmp = new Uint8Array(w * h), out = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let sum = 0, n = 0;
+        const x0 = x - radius < 0 ? 0 : x - radius;
+        const x1 = x + radius >= w ? w - 1 : x + radius;
+        for (let i = x0; i <= x1; i++) { sum += src[y * w + i]; n++; }
+        tmp[y * w + x] = (sum / n) | 0;
+      }
+    }
+    for (let x = 0; x < w; x++) {
+      for (let y = 0; y < h; y++) {
+        let sum = 0, n = 0;
+        const y0 = y - radius < 0 ? 0 : y - radius;
+        const y1 = y + radius >= h ? h - 1 : y + radius;
+        for (let i = y0; i <= y1; i++) { sum += tmp[i * w + x]; n++; }
+        out[y * w + x] = (sum / n) | 0;
+      }
+    }
+    return out;
+  }
+
+  let mask = null;
+  if (warmth) {
+    const w = img.bitmap.width, h = img.bitmap.height, d = img.bitmap.data;
+    const smooth = v => (v < 0 ? 0 : v > 1 ? 1 : v);
+    mask = new Uint8Array(w * h);
+    for (let i = 0, p = 0; p < w * h; p++, i += 4) {
+      // the gains, exactly as the main pass applies them
+      const l0 = (0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]) / 255;
+      const ww = gainFalloff > 0 ? 1 - Math.pow(l0 < 0 ? 0 : l0 > 1 ? 1 : l0, gainFalloff) : 1;
+      const qr = d[i]   * (1 + (g.rGain - 1) * ww);
+      const qg = d[i+1] * (1 + (g.gGain - 1) * ww);
+      const qb = d[i+2] * (1 + (g.bGain - 1) * ww);
+
+      let wt;
+      if (warmthFull <= warmthFloor) wt = 1;
+      else {
+        let t = smooth(((0.299*qr + 0.587*qg + 0.114*qb) / 255 - warmthFloor) / (warmthFull - warmthFloor));
+        wt = t * t * (3 - 2 * t);
+      }
+      let skin = 1;
+      if (skinOnly) {
+        let t = smooth(((qg - qb) - skinLo) / (skinHi - skinLo));
+        skin = t * t * (3 - 2 * t);
+        /* Green-minus-blue cannot tell an arm from an olive t-shirt --
+         * measured, the shirt reads 23 and skin 17, so the shirt comes out
+         * as MORE skin than skin and takes the tan meant for the person
+         * wearing it. How far red sits above green does separate them:
+         * light skin 76, that shirt 23 to 38, a white shirt 50. */
+        if (redHi > redLo) {
+          let u = smooth(((qr - qg) - redLo) / (redHi - redLo));
+          skin *= u * u * (3 - 2 * u);
+        }
+      }
+      mask[p] = Math.round(255 * wt * skin);
+    }
+
+    const hole = Math.round((g.warmthGateHole == null ? 0 : g.warmthGateHole) * w);
+    if (hole >= 1) {
+      mask = span(mask, w, h, hole, Math.max);   // spread out: holes fill
+      mask = span(mask, w, h, hole, Math.min);   // pull back: edges return
+      mask = boxBlur(mask, w, h, Math.max(1, Math.round(hole / 3)));  // take off the stairs
+    }
+  }
 
   img.scan(0,0,img.bitmap.width,img.bitmap.height,function(x,y,idx){
     let r=this.bitmap.data[idx], gr=this.bitmap.data[idx+1], b=this.bitmap.data[idx+2];
@@ -120,37 +241,11 @@ function flashGrade(img){
      *
      * Set warmthFloor equal to warmthFull to go back to a flat curve. */
     if (warmth) {
-      const lum = (0.299*r + 0.587*gr + 0.114*b) / 255;
-      let wt;
-      if (warmthFull <= warmthFloor) wt = 1;
-      else {
-        wt = (lum - warmthFloor) / (warmthFull - warmthFloor);
-        wt = wt < 0 ? 0 : wt > 1 ? 1 : wt;
-        wt = wt * wt * (3 - 2 * wt);        // smoothstep: no visible edge
-      }
-      /* Keep the warmth off the backdrop.
-       *
-       * Warmth strong enough to tan light skin also turns the pink wall
-       * orange and the white shirts cream, because both are bright and the
-       * ramp above only looks at brightness. Measured at warmth 0.25 the
-       * backdrop's R-B doubles, from 40 to 80 -- a different brand colour,
-       * not a warmer photo.
-       *
-       * Skin and the backdrop separate cleanly on one number here. After
-       * the gains, skin sits at green-minus-blue around +14, the fr-anz
-       * pink at about -6, a white shirt near +4. Ramping across that gap
-       * leaves the wall alone, warms skin fully, and gives shirts a third
-       * of the effect, which reads as film warmth rather than a stain.
-       *
-       * skinOnly:false turns this off and warms everything evenly. */
-      let skin = 1;
-      if (skinOnly) {
-        skin = ((gr - b) - skinLo) / (skinHi - skinLo);
-        skin = skin < 0 ? 0 : skin > 1 ? 1 : skin;
-        skin = skin * skin * (3 - 2 * skin);
-      }
-
-      const a = warmth * wt * skin;
+      // What the two gates below look at: the blurred copy when there is
+      // one, otherwise this pixel exactly as before.
+      /* Both questions were answered above, for the whole frame at once,
+       * and the holes in that answer were filled before it got here. */
+      const a = warmth * (mask[idx >> 2] / 255);
 
       /* Pull green and blue DOWN rather than pushing red up.
        *
