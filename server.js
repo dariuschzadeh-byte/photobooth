@@ -24,6 +24,7 @@ const stats = require("./src/stats");
 const events = require("./src/events");
 const exifTool = require("./src/exif");
 const reporter = require("./src/reporter");
+const printerwatch = require("./src/printerwatch");
 const adminPage = require("./src/admin");
 const auth = require("./src/auth");
 const camera = require("./src/camera");
@@ -437,6 +438,11 @@ app.listen(config.PORT, config.HOST, () => {
   console.log(`  mode    ${config.TEST_MODE ? "TEST (no hardware)" : "LIVE (camera + printer)"}`);
   console.log(`  codes   ${s.total} total · ${s.used} used · ${s.remaining} left`);
   console.log("──────────────────────────────────────────────");
+
+  /* Ask Windows how the printer is, every few minutes. Puts back the
+     signal that was lost when Hot Folder Print was bypassed, and keeps
+     the USB port from being powered down during a quiet spell. */
+  printerwatch.start();
 
   /* The complete list of things the cloud dashboard may do to this booth.
      Anything not named here is refused, so widening the dashboard's reach

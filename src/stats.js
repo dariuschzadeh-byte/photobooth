@@ -17,6 +17,7 @@ const path = require("path");
 const config = require("../config");
 const events = require("./events");
 const special = require("./specialcodes");
+const printerwatch = require("./printerwatch");
 
 const DNP_STATUS = "C:\\DNP\\HotFolderPrint\\Logs\\printer_status.txt";
 
@@ -327,6 +328,21 @@ function buildAlerts({ pr, hf, capacity, codeStats, evs7 }) {
     }
   }
 
+  /* With Hot Folder Print bypassed, this is the only thing that knows
+     whether the printer is reachable. Silence here is not "fine", it is
+     "nobody has looked" -- so it only speaks when it has an answer. */
+  const win = printerwatch.status();
+  if (!usingHotFolder && win && !win.ok) {
+    add("critical", "windows_printer",
+      'Windows reports the printer as "' + win.status + '"',
+      (win.jobs ? win.jobs + " job(s) waiting in the queue. " : "") +
+      "Nothing will come out until this clears. Check paper, ribbon and the cover.");
+  } else if (!usingHotFolder && win && win.ok && win.jobs > 0) {
+    add("warning", "print_queue_stuck",
+      win.jobs + " print job(s) waiting",
+      "They were accepted but have not come out. Usually paper, ribbon, or an open cover.");
+  }
+
   const f7 = funnel(evs7);
   if (f7.started >= 10 && f7.completionRate !== null && f7.completionRate < 70) {
     add("warning", "low_completion",
@@ -410,8 +426,11 @@ function collect(codeStats) {
     runsOutOn: daysLeft === null ? null : new Date(Date.now() + daysLeft * 86400000).toISOString(),
   };
 
+  const win = printerwatch.status();
+
   return {
     codes: publicCodeStats(codeStats),
+    windowsPrinter: win,
     special: { staffQuota: special.staffQuota() },
     printer: pr,
     hotFolder: hf,
