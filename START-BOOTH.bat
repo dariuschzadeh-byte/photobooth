@@ -152,8 +152,13 @@ REM ---- helper: sets UP=1 if the booth server is listening -------------
 REM  netstat on purpose, NOT PowerShell's Invoke-WebRequest: on this PC
 REM  that cmdlet routes even localhost through the system proxy and just
 REM  times out. netstat is instant and has no such problem.
+REM
+REM  Match the port and not the address. Bound to this PC only, netstat
+REM  prints 127.0.0.1:3000; reachable from the wifi it prints 0.0.0.0:3000.
+REM  Looking for the loopback address made a booth that was running
+REM  perfectly well look dead the moment the control page was opened up.
 :isup
 set UP=0
-netstat -an | findstr /C:"127.0.0.1:3000" | findstr /C:"LISTENING" >nul 2>&1
+netstat -an | findstr /R /C:":3000 " | findstr /C:"LISTENING" >nul 2>&1
 if not errorlevel 1 set UP=1
 exit /b 0

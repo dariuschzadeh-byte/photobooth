@@ -22,6 +22,10 @@ data/import-codes.txt
 data/import-*.txt
 data/import-*.csv
 data/redemptions.log
+# Which state printing is in right now. Runtime, not source: committed, an
+# UPDATE-BOOTH would carry one PC's setting to the booth and could leave it
+# silently not printing -- or start printing during a look test.
+data/preview-mode.json
 data/server.log
 _attic/
 

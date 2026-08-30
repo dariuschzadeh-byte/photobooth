@@ -30,6 +30,7 @@ const auth = require("./src/auth");
 const camera = require("./src/camera");
 const { buildStrip } = require("./src/strip");
 const { printStrip } = require("./src/printer");
+const preview = require("./src/preview");
 
 // make sure runtime folders exist
 for (const p of [config.paths.data, config.paths.output, config.paths.prints, config.paths.sessions]) {
@@ -60,9 +61,33 @@ cleanOldOutput();
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+/* Guest screen and camera stay on this PC even when the control page is
+   opened to the cafe network. /api/validate spends a voucher code and
+   /api/capture fires the camera -- neither is something a stranger on the
+   wifi gets to do, and no login prompt protects them because the kiosk
+   itself never logs in.
+
+   Runs before every route on purpose: a route added later is fenced by
+   default rather than by remembering. */
+const LOCAL_ONLY = [/^\/api\//, /^\/$/, /^\/index\.html$/];
+app.use((req, res, next) => {
+  if (config.HOST === "127.0.0.1") return next();          // nothing is exposed anyway
+  if (isLocal(req)) return next();
+  if (LOCAL_ONLY.some(re => re.test(req.path))) {
+    return res.status(403).send("The booth screen runs on the booth. Open /admin instead.");
+  }
+  next();
+});
+
 app.use(express.static(config.paths.public));
-app.use("/sessions", express.static(config.paths.sessions));
-app.use("/prints", express.static(config.paths.prints));
+
+/* Both of these are guest photographs. They were served to anyone who
+   could reach the port, which was harmless only for as long as the port
+   was reachable from nowhere. requireLogin lets the kiosk through
+   untouched -- it runs on this PC and trustLocalhost covers it. */
+app.use("/sessions", requireLogin, express.static(config.paths.sessions));
+app.use("/prints", requireLogin, express.static(config.paths.prints));
 
 const sessions = new Map(); // id -> { dir, photos: [], code, kind: guest|master|staff }
 
@@ -194,6 +219,25 @@ async function captureChecked(sessionDir, index) {
     events.log("photo_dark", { photo: index + 1, brightness: Math.round(mean * 10) / 10, gaveUp: true });
   }
   return { file, brightness: mean };
+}
+
+/* The finished sheets, newest first. What actually came out of the
+   booth -- or would have, in preview mode. */
+function recentStrips(limit) {
+  try {
+    return fs.readdirSync(config.paths.prints)
+      .filter(f => /\.png$/i.test(f))
+      .map(f => { try { return { f, t: fs.statSync(path.join(config.paths.prints, f)).mtimeMs }; }
+                  catch (e) { return null; } })
+      .filter(Boolean)
+      .sort((a, b) => b.t - a.t)
+      .slice(0, limit || 12)
+      .map(x => ({
+        url: "/prints/" + encodeURIComponent(x.f),
+        staff: /^(staff|test)-/i.test(x.f),
+        at: new Date(x.t).toISOString(),
+      }));
+  } catch (e) { return []; }
 }
 
 /* ---------- control centre login ------------------------------------ */
@@ -434,6 +478,15 @@ app.post("/admin/testprint", requireLogin, async (req, res) => {
 });
 
 // The control centre: numbers, charts, code management, quick actions.
+app.post("/admin/preview", requireLogin, (req, res) => {
+  const on = String((req.body && req.body.on) || "") === "1";
+  preview.set(on);
+  events.log(on ? "preview_mode_on" : "preview_mode_off", {});
+  res.redirect("/admin?msg=" + encodeURIComponent(
+    on ? "Preview mode is ON - sessions run for real and use no paper."
+       : "Preview mode is OFF - the booth prints again."));
+});
+
 app.get("/admin", requireLogin, (req, res) => {
   const raw = codes.stats();
   const s = stats.collect(raw);
@@ -444,6 +497,8 @@ app.get("/admin", requireLogin, (req, res) => {
     host: config.HOST,
     port: config.PORT,
     special: codes.specialCodes(),
+    preview: preview.read(),
+    strips: recentStrips(12),
   }));
 });
 
@@ -453,7 +508,17 @@ app.listen(config.PORT, config.HOST, () => {
   console.log("──────────────────────────────────────────────");
   console.log("  fr-anz photobooth running");
   console.log(`  → open  http://localhost:${config.PORT}`);
-  console.log(`  bind    ${config.HOST} ${config.HOST === "127.0.0.1" ? "(this PC only)" : "(reachable from the network!)"}`);
+  if (config.HOST === "127.0.0.1") {
+    console.log("  bind    this PC only - the control page cannot be opened from another computer");
+  } else {
+    // The address to type on the other computer. Printed rather than left
+    // to be guessed: the booth's IP comes from the cafe router and changes
+    // whenever that router feels like it.
+    const lan = Object.values(require("os").networkInterfaces()).flat()
+      .filter(n => n && n.family === "IPv4" && !n.internal).map(n => n.address);
+    console.log(`  bind    open to the wifi - control page on ${
+      lan.length ? lan.map(a => `http://${a}:${config.PORT}/admin`).join("  ") : "this PC's IP address"}`);
+  }
   console.log(`  mode    ${config.TEST_MODE ? "TEST (no hardware)" : "LIVE (camera + printer)"}`);
   console.log(`  codes   ${s.total} total · ${s.used} used · ${s.remaining} left`);
   console.log("──────────────────────────────────────────────");

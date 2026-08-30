@@ -40,6 +40,8 @@ function barChart(points, labelFn, opts = {}) {
 
 function page(s, opts) {
   const { msg, testMode, host, port, special } = opts;
+  const pv = opts.preview || { on: false, since: null };
+  const strips = opts.strips || [];
   // Straight from codes.stats() on this PC, deliberately NOT from the
   // collected snapshot: the snapshot is what gets shipped to the cloud,
   // and a list of every redeemed voucher is not something to publish.
@@ -91,6 +93,15 @@ header{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content
 
 section{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:19px 21px;margin-bottom:16px;box-shadow:0 1px 3px rgba(120,90,70,.05)}
 section h2{margin:0 0 3px;font-size:16px;font-weight:700}
+.strips{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:11px}
+.strips a{display:block;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface-2);text-decoration:none;position:relative}
+.strips img{display:block;width:100%;height:auto}
+.strips .when{display:block;padding:5px 7px;font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.strips .tag{position:absolute;top:6px;right:6px;background:var(--rose-deep);color:#fff;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;padding:2px 6px;border-radius:20px}
+.pvbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:10px;margin-bottom:14px;border:1px solid var(--line)}
+.pvbar.on{background:#FFF6E2;border-color:#E7CE92}
+.pvbar.off{background:var(--surface-2)}
+.pvbar .state{font-weight:700}
 section .hint{margin:0 0 15px;font-size:13px;color:var(--ink-soft)}
 .two{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
 
@@ -195,6 +206,32 @@ ${s.flashWarnings.length ? `<div class="warnbox"><b>The flash misfired recently.
       <button class="ghost" type="submit">Sign out</button>
     </form>
   </div>
+</section>
+
+<section>
+  <h2>Photos</h2>
+  <p class="hint">Every strip the booth has built, newest first. Tap one to see it full size.</p>
+
+  <div class="pvbar ${pv.on ? "on" : "off"}">
+    <span class="state">Preview mode: ${pv.on ? "ON &mdash; nothing is being printed" : "off &mdash; the booth prints normally"}</span>
+    <span style="font-size:12.5px;color:var(--ink-soft);flex:1 1 220px">
+      ${pv.on
+        ? "Sessions still run for real: camera, strip, everything but the sheet of paper. Turn this off before guests use the booth."
+        : "Turn on to try the look without spending paper. The camera and the strip stay real &mdash; only printing is skipped."}
+    </span>
+    <form method="post" action="/admin/preview">
+      <input type="hidden" name="on" value="${pv.on ? "0" : "1"}">
+      <button type="submit" class="${pv.on ? "" : "ghost"}">${pv.on ? "Start printing again" : "Turn on preview mode"}</button>
+    </form>
+  </div>
+
+  ${strips.length ? `<div class="strips">${strips.map(st => `
+    <a href="${esc(st.url)}" target="_blank" rel="noopener">
+      ${st.staff ? `<span class="tag">test</span>` : ""}
+      <img src="${esc(st.url)}" alt="" loading="lazy">
+      <span class="when">${esc(new Date(st.at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>
+    </a>`).join("")}</div>`
+    : `<p class="hint" style="margin:0">No strips yet. They appear here as soon as a session finishes.</p>`}
 </section>
 
 <section>

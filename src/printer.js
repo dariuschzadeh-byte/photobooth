@@ -14,11 +14,20 @@ const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 const config = require("../config");
+const preview = require("./preview");
 
 async function printStrip(stripPath) {
   if (config.TEST_MODE) {
     // nothing physical — the strip already lives in /output/prints
     return { printed: false, test: true, file: stripPath };
+  }
+
+  /* Preview mode: everything real except the paper. Checked here rather
+     than at the call site so there is exactly one place in the code that
+     can decide a sheet is not worth spending -- and so no future caller
+     can print by forgetting to ask. */
+  if (preview.isOn()) {
+    return { printed: false, preview: true, via: "preview", file: stripPath };
   }
 
   if (config.printer.mode === "hotfolder") {
