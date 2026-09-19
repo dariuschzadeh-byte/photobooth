@@ -103,47 +103,28 @@ const check = (name, fn) => {
     assert(Array.isArray(s.charts.heatmap) && s.charts.heatmap.length === 7);
   });
 
-  check("a new card batch retires the old one for good", () => {
+  check("a reset makes every code valid again for a reprint", () => {
     const { execFileSync } = require("child_process");
-    const run = extra => execFileSync(process.execPath,
-      ["scripts/import-codes.js", "data/import-codes.txt", "--reset", ...extra], { stdio: "pipe" });
+    const run = extra => execFileSync(process.execPath, ["scripts/reset-codes.js", ...extra], { stdio: "pipe" });
 
-    const oldUsed = codes.stats().usedList[0].code;          // redeemed further up
-    const oldUnused = codes.unusedCodes()[0];                 // a card never used
-    const known = new Set(Object.keys(JSON.parse(fs.readFileSync(config.paths.codesFile, "utf8")).codes));
-    const reserved = special.reserved();
-    const fresh = [];
-    for (let i = 0; fresh.length < 20; i++) {
-      const c = String(100000 + ((i * 7919) % 899999)).padStart(6, "0");
-      if (!known.has(c) && !reserved.has(c) && !fresh.includes(c)) fresh.push(c);
-    }
-    fs.writeFileSync("data/import-codes.txt", fresh.join("\n"));
+    const spent = codes.stats().usedList[0].code;            // redeemed further up
+    assert.strictEqual(codes.validateAndRedeem(spent).reason, "already_used");
+    const before = codes.stats();
 
     run(["--dry-run"]);
-    assert.strictEqual(codes.stats().total, known.size, "a dry run changed the store");
+    assert.deepStrictEqual(codes.stats().used, before.used, "a dry run changed the store");
+
     run([]);
+    const after = codes.stats();
+    assert.strictEqual(after.total, before.total, "codes were lost");
+    assert.strictEqual(after.used, 0, "redemptions survived the reset");
+    assert.strictEqual(after.batches.length, 1, "the reprint should be one batch");
+    assert.strictEqual(codes.validateAndRedeem(spent).valid, true, "a spent code did not come back");
+    assert.strictEqual(codes.validateAndRedeem(spent).reason, "already_used", "and it must still work only once");
+    assert(fs.readdirSync("data").some(f => f.startsWith("codes.json.before-reset-")), "no backup written");
 
-    const st = codes.stats();
-    assert.strictEqual(st.total, 20, "counts should cover only the new batch");
-    assert.strictEqual(st.used, 0);
-    assert.strictEqual(codes.validateAndRedeem(oldUsed).reason, "already_used");
-    assert.strictEqual(codes.validateAndRedeem(oldUnused).reason, "retired");
-    assert.strictEqual(codes.release(oldUsed).released, false, "a retired card came back via release");
-    assert.strictEqual(codes.validateAndRedeem(fresh[0]).valid, true);
-
-    // history survives the reset: the old batch still shows what it did
-    const b1 = stats.collect(codes.stats()).batches.find(b => b.batch === 1);
-    assert(b1 && b1.used >= 1, "batch 1 lost its redemptions");
-    // and retired codes do not leave the booth either
-    const snap = JSON.stringify(stats.collect(codes.stats()));
-    assert(!snap.includes(oldUsed) && !snap.includes(oldUnused), "retired codes in the snapshot");
-
-    // a list sharing even one code with anything the booth knows is refused whole
-    fs.writeFileSync("data/import-codes.txt", [oldUnused, ...fresh.slice(1)].join("\n"));
-    let refused = false;
-    try { run([]); } catch (e) { refused = true; }
-    assert(refused, "an overlapping batch was accepted");
-    assert.strictEqual(codes.stats().total, 20, "the refused list still changed the store");
+    // the special codes do not live in the store and must come through untouched
+    assert.strictEqual(codes.validateAndRedeem(c.masterCode).kind, "master");
   });
 
   await (async () => {

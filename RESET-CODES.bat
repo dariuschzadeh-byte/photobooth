@@ -1,39 +1,27 @@
 @echo off
 REM ====================================================================
-REM  fr-anz photobooth - RESET CODES FOR A NEW CARD BATCH
+REM  fr-anz photobooth - RESET CODES FOR A REPRINT
 REM
-REM  Takes every code the booth knows out of service and makes
-REM  data\import-codes.txt the only live batch. Old cards stop working,
-REM  used or not.
+REM  Makes every voucher code valid again, so the same cards can be
+REM  printed and handed out once more. Used cards are thrown away, so a
+REM  spent code is not in anybody's hands.
 REM
-REM  Retired, not deleted: the old codes stay known to the booth, so none
-REM  of them can ever be issued again and no old card can come back to
-REM  life. The store as it was is kept as
+REM  Nothing to copy onto this PC first: the reprinted cards carry the
+REM  codes this booth already has. The store as it was is kept as
 REM  data\codes.json.before-reset-<date and time>.
 REM ====================================================================
 title fr-anz photobooth - reset codes
 cd /d "%~dp0"
-mode con: cols=80 lines=36
+mode con: cols=80 lines=32
 
 echo.
 echo   ============================================================
-echo         fr-anz photobooth - reset codes for a new batch
+echo            fr-anz photobooth - reset codes for a reprint
 echo   ============================================================
 echo.
-
-if not exist "data\import-codes.txt" (
-  echo   PROBLEM: data\import-codes.txt not found.
-  echo.
-  echo   Put the list for the NEW cards there first - one six-digit
-  echo   code per line. It stays on this PC and is never committed.
-  echo.
-  pause
-  exit /b 1
-)
-
 echo   Checking first, without changing anything...
 echo.
-node "scripts\import-codes.js" "data\import-codes.txt" --reset --dry-run
+node "scripts\reset-codes.js" --dry-run
 if errorlevel 1 (
   echo.
   echo   ================================================
@@ -45,10 +33,8 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo.
-echo   After this, every OLD card stops working.
 set "GO="
-set /p GO=  Type RESET to go ahead: 
+set /p GO=  Type RESET to make every code valid again: 
 if /i not "%GO%"=="RESET" (
   echo.
   echo   Cancelled - nothing was changed.
@@ -58,7 +44,7 @@ if /i not "%GO%"=="RESET" (
 )
 
 echo.
-node "scripts\import-codes.js" "data\import-codes.txt" --reset
+node "scripts\reset-codes.js"
 if errorlevel 1 (
   echo.
   echo   Reset failed - see above.
@@ -69,9 +55,8 @@ if errorlevel 1 (
 
 echo.
 echo   ------------------------------------------------------------
-echo    Done. Check it at the booth with two cards:
-echo      a NEW card   - should start a session
-echo      an OLD card  - should be refused
+echo    Done. Try one of the reprinted cards at the booth - it
+echo    should start a session.
 echo   ------------------------------------------------------------
 echo.
 pause

@@ -93,9 +93,6 @@ function validateAndRedeem(input) {
   if (entry.status === "used") {
     return { valid: false, reason: "already_used", usedAt: entry.usedAt };
   }
-  // From a batch that has been replaced. Kept in the store rather than
-  // deleted so it can never be minted again -- see retireAll().
-  if (entry.retired) return { valid: false, reason: "retired" };
 
   entry.status = "used";
   entry.usedAt = new Date().toISOString();
@@ -129,10 +126,6 @@ function release(input, { fromFailedSession = false } = {}) {
   const db = load();
   const entry = db.codes[code];
   if (!entry) return { released: false, reason: "unknown" };
-  // The /admin list offers a release button on every redemption. After a
-  // reset that list would otherwise be 250 old cards waiting to be
-  // brought back one click at a time.
-  if (entry.retired) return { released: false, reason: "retired" };
   if (entry.status !== "used") return { released: false, reason: "not_used" };
 
   entry.status = "unused";
@@ -145,30 +138,16 @@ function release(input, { fromFailedSession = false } = {}) {
 function stats() {
   const db = load();
   const all = Object.entries(db.codes);
-  /* The counts are about the cards that can still be handed out, so a
-     retired batch is left out of them -- otherwise a fresh batch of 250
-     on top of 250 spent ones opens at "50 percent left" and the low-codes
-     alarm fires on the wrong number.
-
-     usedList keeps every redemption ever, retired or not, because the
-     per-batch economics (how fast a batch comes back) are history and
-     should survive a reset. Each entry says whether it is retired, so the
-     page that offers "release" can leave those out. It stays the ONE list
-     of plain codes on purpose: publicCodeStats() strips it by name before
-     anything leaves this PC, and a second list would not be stripped. */
-  const active = all.filter(([, e]) => !e.retired);
-  const used = active.filter(([, e]) => e.status === "used");
-  const unused = active.length - used.length;
+  const used = all.filter(([, e]) => e.status === "used");
+  const unused = all.length - used.length;
   return {
-    total: active.length,
+    total: all.length,
     used: used.length,
     unused,
     remaining: unused,
-    retired: all.length - active.length,
     batches: db.batches,
-    usedList: all
-      .filter(([, e]) => e.status === "used")
-      .map(([code, e]) => ({ code, usedAt: e.usedAt, batch: e.batch, retired: !!e.retired }))
+    usedList: used
+      .map(([code, e]) => ({ code, usedAt: e.usedAt, batch: e.batch }))
       .sort((a, b) => (a.usedAt < b.usedAt ? 1 : -1)),
   };
 }
@@ -177,35 +156,9 @@ function stats() {
 function unusedCodes() {
   const db = load();
   return Object.entries(db.codes)
-    .filter(([, e]) => e.status !== "used" && !e.retired)
+    .filter(([, e]) => e.status !== "used")
     .map(([code]) => code)
     .sort();
-}
-
-/**
- * Take every code currently in the store out of service, for a new card
- * batch replacing the old one.
- *
- * Retired, not deleted. A deleted code is a code the generator is free to
- * mint again, and the old card carrying it -- used or not -- would start
- * working the day it came back. Kept in the store, every future batch is
- * checked against it automatically, because both generators and the
- * importer already refuse anything the store knows.
- *
- * Status is left exactly as it was: used stays used, so the history of how
- * a batch was spent is intact. Returns what was retired.
- */
-function retireAll(db, when) {
-  const at = when || new Date().toISOString();
-  let used = 0, unused = 0;
-  for (const e of Object.values(db.codes)) {
-    if (e.retired) continue;
-    e.retired = true;
-    e.retiredAt = at;
-    if (e.status === "used") used++; else unused++;
-  }
-  for (const b of db.batches || []) if (!b.retired) { b.retired = true; b.retiredAt = at; }
-  return { used, unused };
 }
 
 /**
@@ -241,4 +194,4 @@ function specialCodes() {
   return { ...sc().codes(), staffQuota: sc().staffQuota() };
 }
 
-module.exports = { validateAndRedeem, release, stats, unusedCodes, generateBatch, specialCodes, retireAll };
+module.exports = { validateAndRedeem, release, stats, unusedCodes, generateBatch, specialCodes };

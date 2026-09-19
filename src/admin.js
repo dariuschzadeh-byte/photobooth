@@ -45,9 +45,7 @@ function page(s, opts) {
   // Straight from codes.stats() on this PC, deliberately NOT from the
   // collected snapshot: the snapshot is what gets shipped to the cloud,
   // and a list of every redeemed voucher is not something to publish.
-  // Only the live batch. A retired card cannot be released anyway, so
-  // listing it next to a release button would only invite the attempt.
-  const usedList = (opts.usedList || []).filter(u => !u.retired);
+  const usedList = opts.usedList || [];
   const sq = (special && special.staffQuota) || { used: 0, limit: 0, left: 0 };
   const pr = s.printer;
 
@@ -247,7 +245,7 @@ ${s.flashWarnings.length ? `<div class="warnbox"><b>The flash misfired recently.
     <table>
       <thead><tr><th>Batch</th><th>Created</th><th>Codes</th></tr></thead>
       <tbody>
-        ${(s.codes.batches || []).map(b => `<tr><td>${esc(b.batch)}${b.retired ? ` <span style="color:var(--ink-soft)">(retired ${esc(new Date(b.retiredAt).toLocaleDateString("en-GB"))})</span>` : ""}</td><td>${new Date(b.generatedAt).toLocaleString()}</td><td class="mono">${esc(b.count)}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">no batches yet</td></tr>`}
+        ${(s.codes.batches || []).map(b => `<tr><td>${esc(b.batch)}</td><td>${new Date(b.generatedAt).toLocaleString()}</td><td class="mono">${esc(b.count)}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">no batches yet</td></tr>`}
       </tbody>
     </table>
   </div>

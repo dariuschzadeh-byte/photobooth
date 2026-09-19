@@ -382,9 +382,7 @@ function flashWarnings(limit = 5) {
  */
 function publicCodeStats(codeStats) {
   const { usedList, ...rest } = codeStats || {};
-  // usedList holds every redemption ever, retired batches included; the
-  // count the dashboard shows is about the batch in circulation.
-  return { ...rest, usedCount: Array.isArray(usedList) ? usedList.filter(u => !u.retired).length : 0 };
+  return { ...rest, usedCount: Array.isArray(usedList) ? usedList.length : 0 };
 }
 
 function collect(codeStats) {
