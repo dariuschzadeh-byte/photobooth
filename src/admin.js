@@ -49,8 +49,20 @@ function page(s, opts) {
   const sq = (special && special.staffQuota) || { used: 0, limit: 0, left: 0 };
   const pr = s.printer;
 
-  const mediaPct = Math.min(100, Math.round((pr.sheets / 700) * 100));
-  const mediaState = !pr.found ? "bad" : pr.low ? "warn" : "good";
+  const med = pr.media || { known: false, perRoll: 700 };
+  const mediaPct = med.known ? Math.min(100, Math.round((pr.sheets / med.perRoll) * 100)) : 0;
+  const mediaState = !med.known ? "bad" : pr.low ? "warn" : "good";
+  const onlineCls = pr.online === null ? "" : pr.online ? "good" : "bad";
+  const onlineTxt = pr.online === null ? "status unknown" : pr.online ? "online" : "offline";
+  // Where the paper number comes from, said out loud -- a count that is
+  // silently wrong is exactly what this replaced.
+  const srcTxt = { printer: "the printer's last reading", new_roll: "a new roll", entered: "the count typed in" };
+  const mediaFoot = !med.known
+    ? "no reading yet &mdash; see Printer paper below"
+    : !med.counted
+      ? `${pr.sheets} sheets &times; ${s.stripsPerSheet} &middot; read from the printer`
+      : `about ${pr.sheets} sheets &times; ${s.stripsPerSheet} &middot; ${med.printedSince} printed since ` +
+        `${srcTxt[med.base.source] || med.base.source} on ${esc(new Date(med.base.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))}`;
   const codesPct = s.codes.total ? Math.round((s.codes.remaining / s.codes.total) * 100) : 0;
   const codesState = s.codes.remaining === 0 ? "bad" : s.codes.remaining < 25 ? "warn" : "good";
 
@@ -139,9 +151,9 @@ td.mono,.mono{font-family:ui-monospace,Consolas,monospace;font-variant-numeric:t
     <div class="sub">${testMode ? "TEST mode (no hardware)" : "LIVE"} &middot; http://${esc(host)}:${port} &middot; staff code <b class="mono">${esc(special.staffCode)}</b> (${sq.left} of ${sq.limit} left today)</div>
   </div>
   <div class="chips">
-    <span class="chip ${pr.online ? "good" : "bad"}">printer ${pr.online ? "online" : "offline"}</span>
+    <span class="chip ${onlineCls}">printer ${onlineTxt}</span>
     <span class="chip ${codesState}">${s.codes.remaining} codes left</span>
-    <span class="chip ${mediaState}">${pr.strips} strips left</span>
+    <span class="chip ${mediaState}">${med.known ? `${med.counted ? "about " : ""}${pr.strips} strips left` : "paper count unknown"}</span>
   </div>
 </header>
 
@@ -150,8 +162,8 @@ ${msg ? `<div class="msg">${esc(msg)}</div>` : ""}
 <div class="grid">
   <div class="card">
     <div class="lbl">Strips left</div>
-    <div class="num ${mediaState}">${pr.found ? pr.strips : "&mdash;"}</div>
-    <div class="foot">${pr.found ? `${pr.sheets} sheets &times; ${s.stripsPerSheet}` : "printer offline &mdash; no reading"}</div>
+    <div class="num ${mediaState}">${med.known ? pr.strips : "&mdash;"}</div>
+    <div class="foot">${mediaFoot}</div>
     <div class="meter"><i class="${mediaState === "good" ? "" : mediaState}" style="width:${mediaPct}%"></i></div>
   </div>
   <div class="card">
@@ -172,8 +184,24 @@ ${msg ? `<div class="msg">${esc(msg)}</div>` : ""}
   </div>
 </div>
 
-${pr.low ? `<div class="warnbox"><b>Order new media.</b> Only ${pr.sheets} sheets (${pr.strips} strips) left &mdash; below the ${s.lowMediaThreshold}-sheet mark.</div>` : ""}
-${!pr.found ? `<div class="warnbox"><b>No printer reading.</b> DNP Hot Folder Print is not running, or the printer is off / unplugged. Nothing will print in this state.</div>` : ""}
+${pr.low ? `<div class="warnbox"><b>Order new media.</b> About ${pr.sheets} sheets (${pr.strips} strips) left &mdash; below the ${s.lowMediaThreshold}-sheet mark.</div>` : ""}
+${s.printerMode === "hotfolder" && !pr.found ? `<div class="warnbox"><b>No printer reading.</b> DNP Hot Folder Print is not running, or the printer is off / unplugged. Nothing will print in this state.</div>` : ""}
+
+<section>
+  <h2>Printer paper</h2>
+  <p class="hint">The printer knows the exact count, but this PC stopped asking it when printing moved away from Hot Folder Print. So the booth counts down from the last number it was given, one sheet per print. Tell it when a roll goes in &mdash; or type in the count shown by DNP's Status App &mdash; and the number stays right.</p>
+  <div class="actions">
+    <form method="post" action="/admin/media" onsubmit="return confirm('A full new roll (${med.perRoll} sheets) has just gone in?')">
+      <input type="hidden" name="action" value="new_roll">
+      <button type="submit">New roll inserted</button>
+    </form>
+    <form method="post" action="/admin/media" style="display:flex;gap:8px;align-items:center">
+      <input type="hidden" name="action" value="set">
+      <input name="remaining" type="number" min="0" max="${med.perRoll * 2}" required placeholder="sheets left" style="width:130px">
+      <button class="ghost" type="submit">Save count</button>
+    </form>
+  </div>
+</section>
 ${s.flashWarnings.length ? `<div class="warnbox"><b>The flash misfired recently.</b> Photos came out black. Check the sync cable and secure its plugs.
   ${s.flashWarnings.slice(0, 3).map(w => `<span class="mono">${esc(w.trim())}</span>`).join("")}</div>` : ""}
 
@@ -287,7 +315,7 @@ ${s.flashWarnings.length ? `<div class="warnbox"><b>The flash misfired recently.
 </section>
 
 <p class="sub" style="text-align:center;margin-top:26px">
-  fr-anz photobooth &middot; ${pr.found ? `${esc(pr.model)} &middot; lifetime prints ${pr.lifeCounter}` : "printer not reachable"}
+  fr-anz photobooth &middot; ${pr.found ? `${esc(pr.model)} &middot; lifetime prints ${pr.lifeCounter}${s.printerMode === "windows" ? " (last read by Hot Folder Print)" : ""}` : s.printerMode === "windows" ? "printing through Windows" : "printer not reachable"}
 </p>
 </div></body></html>`;
 }

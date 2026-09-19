@@ -18,6 +18,7 @@ const config = require("../config");
 const events = require("./events");
 const special = require("./specialcodes");
 const printerwatch = require("./printerwatch");
+const media = require("./media");
 
 const DNP_STATUS = "C:\\DNP\\HotFolderPrint\\Logs\\printer_status.txt";
 
@@ -56,6 +57,7 @@ function printer() {
       lifeCounter: Number(p.LifeCounter) || 0,
       low: sheets > 0 && sheets < LOW_MEDIA_SHEETS,
       statusAgeMinutes: Math.round((Date.now() - st.mtimeMs) / 60000),
+      at: st.mtime.toISOString(),
     };
   } catch (e) {
     // No status file at all = Hot Folder Print is not running, or the
@@ -291,12 +293,18 @@ function buildAlerts({ pr, hf, capacity, codeStats, evs7 }) {
       `Printer status has not updated in ${pr.statusAgeMinutes} min`,
       "Hot Folder Print writes this file continuously. It stopping means HFP stopped.");
   }
-  if (!pr.found && usingHotFolder) {
-    add("critical", "printer_offline",
-      "No printer status file",
-      "The printer is switched off or unplugged, or Hot Folder Print was never started.");
-  } else if (pr.found && !pr.online) {
-    add("critical", "printer_error", `Printer reports ${pr.status}`, `Model ${pr.model}.`);
+  // Both of these read Hot Folder Print's file, so they only mean something
+  // while HFP is the print route. Printing through Windows the file is
+  // frozen, and a status it froze with used to raise a printer_error that
+  // described some earlier day. The Windows route has its own check below.
+  if (usingHotFolder) {
+    if (!pr.found) {
+      add("critical", "printer_offline",
+        "No printer status file",
+        "The printer is switched off or unplugged, or Hot Folder Print was never started.");
+    } else if (!pr.online) {
+      add("critical", "printer_error", `Printer reports ${pr.status}`, `Model ${pr.model}.`);
+    }
   }
 
   const dark = evs7.filter(e => e.type === "photo_dark").length;
@@ -315,8 +323,12 @@ function buildAlerts({ pr, hf, capacity, codeStats, evs7 }) {
     add("warning", "media_reorder",
       `Order media now — ${capacity.daysLeft} days left, delivery takes ${LEAD_TIME_DAYS}`,
       `${pr.sheets} sheets (${pr.strips} strips) remaining at ${capacity.perDay}/day.`);
-  } else if (pr.found && pr.low) {
-    add("warning", "media_low", `Only ${pr.sheets} sheets left`, `Below the ${LOW_MEDIA_SHEETS}-sheet floor.`);
+  } else if (pr.low) {
+    add("warning", "media_low", `About ${pr.sheets} sheets left`, `Below the ${LOW_MEDIA_SHEETS}-sheet floor.`);
+  }
+  if (!pr.media || !pr.media.known) {
+    add("info", "media_unknown", "Paper count unknown",
+      "Press \"New roll\" on the control page after the next roll change, or type in the count from DNP's Status App.");
   }
 
   if (codeStats.total > 0) {
@@ -393,15 +405,45 @@ function collect(codeStats) {
   const hf = hotFolder();
   const evs = events.all();
   const evs7 = evs.filter(e => sinceDays(e.date, 7));
+  const win = printerwatch.status();
+  const usingHotFolder = !config.printer || config.printer.mode === "hotfolder";
+
+  /* Paper. HFP's number is only the printer's own while HFP is running;
+     otherwise it is a snapshot from whenever it last ran. media.estimate()
+     counts down from the newest reading anyone can vouch for, so every
+     figure below -- tile, alarm, reorder date -- works in both modes. */
+  const med = media.estimate(pr, evs);
+  pr.media = med;
+  pr.sheets = med.known ? med.remaining : 0;
+  pr.strips = pr.sheets * STRIPS_PER_SHEET;
+  pr.low = med.known && pr.sheets < LOW_MEDIA_SHEETS;
+
+  /* Online. Printing through Windows, the frozen HFP file reports whatever
+     the printer was doing the last time HFP ran. Windows' own answer is
+     the live one; null until the first poll has come back. */
+  if (!usingHotFolder) {
+    pr.online = win ? win.ok !== false : null;
+    pr.status = win ? win.status : "not checked yet";
+  }
+
+  // Sheets that actually reached the printer. Counted from the event log,
+  // not from output/prints: preview-mode strips are files too, and they
+  // used no paper.
+  const printedSheets = evs.filter(e =>
+    (e.type === "print_ok" || e.type === "test_print") && e.printed === true);
 
   const guestToday = files.guest.filter(isToday).length;
   const guest7 = files.guest.filter(d => sinceDays(d, 7)).length;
 
-  // Media burn uses every strip, guest and staff alike -- paper does not
+  // Media burn counts every sheet, guest and staff alike -- paper does not
   // care who it was for. Revenue counts guests only.
-  const burn7 = allPrints.filter(d => sinceDays(d, 7)).length;
+  //
+  // In SHEETS. This used to divide strips left by sheets per day, which
+  // put the run-out date twice as far away as it is -- and the reorder
+  // alarm that keys on it a week or more too late.
+  const burn7 = printedSheets.filter(e => sinceDays(e.date, 7)).length;
   const perDay = Math.round((burn7 / 7) * 10) / 10;
-  const daysLeft = perDay > 0.2 ? Math.round(pr.strips / perDay) : null;
+  const daysLeft = perDay > 0.2 ? Math.round(pr.sheets / perDay) : null;
 
   const costPerSheet = Number(ops.costPerSheetIDR) || 0;
   const costPerStrip = costPerSheet ? Math.round(costPerSheet / STRIPS_PER_SHEET) : 0;
@@ -410,9 +452,11 @@ function collect(codeStats) {
     strips: pr.strips,
     codesLeft: codeStats.unused,
     // The honest answer to "how many more photos can we make" is whichever
-    // runs out first. It is almost always the printer.
-    possible: Math.min(pr.strips, codeStats.unused),
-    limitedBy: pr.strips <= codeStats.unused ? "printer" : "codes",
+    // runs out first. One voucher is one session is one sheet, so this is
+    // counted in sessions -- comparing strips with codes made the printer
+    // look good for twice as many guests as it could serve.
+    possible: Math.min(pr.sheets, codeStats.unused),
+    limitedBy: pr.sheets <= codeStats.unused ? "printer" : "codes",
     perDay,
     daysLeft,
     leadTimeDays: LEAD_TIME_DAYS,
@@ -422,11 +466,9 @@ function collect(codeStats) {
     // Requires pr.found: with no printer we do not know the media count, and
     // "0 strips left, order now" on top of "printer offline" is two alarms
     // for one problem -- the fastest way to teach people to ignore alarms.
-    reorderNow: pr.found && daysLeft !== null && daysLeft <= LEAD_TIME_DAYS,
+    reorderNow: med.known && daysLeft !== null && daysLeft <= LEAD_TIME_DAYS,
     runsOutOn: daysLeft === null ? null : new Date(Date.now() + daysLeft * 86400000).toISOString(),
   };
-
-  const win = printerwatch.status();
 
   return {
     codes: publicCodeStats(codeStats),
@@ -455,8 +497,10 @@ function collect(codeStats) {
     money: {
       costPerSheetIDR: costPerSheet,
       costPerStripIDR: costPerStrip,
-      costTodayIDR: costPerStrip * allPrints.filter(isToday).length,
-      costLast7IDR: costPerStrip * burn7,
+      // Per sheet, times sheets. This was the strip price times the number
+      // of sheets, i.e. half of what was actually spent.
+      costTodayIDR: costPerSheet * printedSheets.filter(e => isToday(e.date)).length,
+      costLast7IDR: costPerSheet * burn7,
       configured: costPerSheet > 0,
     },
     charts: {
@@ -468,6 +512,7 @@ function collect(codeStats) {
     alerts: buildAlerts({ pr, hf, capacity, codeStats, evs7 }),
     flashWarnings: flashWarnings(),
     lowMediaThreshold: LOW_MEDIA_SHEETS,
+    printerMode: usingHotFolder ? "hotfolder" : "windows",
     stripsPerSheet: STRIPS_PER_SHEET,
     generatedAt: new Date().toISOString(),
   };

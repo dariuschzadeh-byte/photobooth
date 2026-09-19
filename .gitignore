@@ -26,6 +26,8 @@ data/redemptions.log
 # UPDATE-BOOTH would carry one PC's setting to the booth and could leave it
 # silently not printing -- or start printing during a look test.
 data/preview-mode.json
+# The paper count the booth is counting down from. Runtime, like the above.
+data/media.json
 data/server.log
 _attic/
 

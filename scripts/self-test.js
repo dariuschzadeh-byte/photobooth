@@ -103,6 +103,43 @@ const check = (name, fn) => {
     assert(Array.isArray(s.charts.heatmap) && s.charts.heatmap.length === 7);
   });
 
+  check("the paper count counts down from the newest reading", () => {
+    const media = require("../src/media");
+    const events = require("../src/events");
+
+    media.set(media.PER_ROLL, "new_roll");
+    assert.strictEqual(media.estimate(null).remaining, media.PER_ROLL);
+
+    events.log("print_ok", { kind: "guest", printed: true });
+    events.log("print_ok", { kind: "guest", printed: true });
+    events.log("print_ok", { kind: "staff", printed: true });
+    events.log("print_ok", { kind: "guest", printed: false });    // preview mode: no paper
+    events.log("test_print", { ok: true, printed: true });
+    const e = media.estimate(null);
+    assert.strictEqual(e.remaining, media.PER_ROLL - 4, "only sheets that reached the printer count");
+
+    // an older printer reading loses to the newer roll; a newer one wins
+    const old = { found: true, online: true, sheets: 123, at: "2020-01-01T00:00:00.000Z" };
+    assert.strictEqual(media.estimate(old).base.source, "new_roll");
+    const fresh = { found: true, online: true, sheets: 321, at: new Date(Date.now() + 60000).toISOString() };
+    assert.strictEqual(media.estimate(fresh).remaining, 321);
+    // a status written while the printer was not healthy is no reading at all
+    assert.strictEqual(media.estimate({ ...fresh, online: false }).base.source, "new_roll");
+
+    media.set(120, "entered");
+    const st = stats.collect(codes.stats());
+    assert.strictEqual(st.printer.sheets, 120);
+    assert.strictEqual(st.printer.strips, 240);
+    // everything downstream in sheets: one voucher is one sheet
+    assert.strictEqual(st.capacity.possible, Math.min(120, codes.stats().unused));
+    if (st.capacity.perDay > 0.2) {
+      assert.strictEqual(st.capacity.daysLeft, Math.round(120 / st.capacity.perDay), "days left must be sheets / sheets per day");
+    }
+    let refused = false;
+    try { media.set("lots", "entered"); } catch (err) { refused = true; }
+    assert(refused, "a nonsense count was accepted");
+  });
+
   check("a reset makes every code valid again for a reprint", () => {
     const { execFileSync } = require("child_process");
     const run = extra => execFileSync(process.execPath, ["scripts/reset-codes.js", ...extra], { stdio: "pipe" });

@@ -56,6 +56,9 @@ module.exports = {
 
     mediaLeadTimeDays: 21,         // how long DNP media takes to reach Bali
     costPerSheetIDR: 0,            // paper + ribbon per 4x6 sheet (= 2 strips)
+    // Sheets on a full RX1HS 4x6 roll -- what "New roll inserted" on
+    // /admin resets the paper count to. One sheet = one session.
+    sheetsPerRoll: 700,
     lowMediaSheets: 50,            // hard floor, whatever the lead-time maths says
     lowCodesPercent: 15,           // warn below this share of a batch unused
 

@@ -31,6 +31,7 @@ const camera = require("./src/camera");
 const { buildStrip } = require("./src/strip");
 const { printStrip } = require("./src/printer");
 const preview = require("./src/preview");
+const media = require("./src/media");
 
 // make sure runtime folders exist
 for (const p of [config.paths.data, config.paths.output, config.paths.prints, config.paths.sessions]) {
@@ -478,6 +479,21 @@ app.post("/admin/testprint", requireLogin, async (req, res) => {
 });
 
 // The control centre: numbers, charts, code management, quick actions.
+/* Tell the booth how much paper is in the printer: a fresh roll, or the
+   number DNP's Status App shows. It counts down from there by itself. */
+app.post("/admin/media", requireLogin, (req, res) => {
+  const b = req.body || {};
+  try {
+    const rec = b.action === "new_roll"
+      ? media.set(media.PER_ROLL, "new_roll")
+      : media.set(b.remaining, "entered");
+    res.redirect("/admin?msg=" + encodeURIComponent(
+      b.action === "new_roll" ? `New roll recorded: ${rec.remaining} sheets.` : `Paper count set to ${rec.remaining} sheets.`));
+  } catch (e) {
+    res.redirect("/admin?msg=" + encodeURIComponent("Paper count not saved: " + e.message));
+  }
+});
+
 app.post("/admin/preview", requireLogin, (req, res) => {
   const on = String((req.body && req.body.on) || "") === "1";
   preview.set(on);
