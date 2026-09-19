@@ -15,6 +15,7 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const { URL } = require("url");
+const cloudkey = require("../src/cloudkey");
 const config = require("../config");
 
 /* The key is NOT in here, and that is the whole point.
@@ -56,21 +57,29 @@ function post(body, headers) {
 }
 
 async function askForKey() {
-  // Reuse the key already saved, so re-running to re-check costs nothing.
+  const arg = process.argv.slice(2).find(a => a && !a.startsWith("--"));
+  if (arg) return cloudkey.normalize(arg);
+
+  /* A saved key used to be reused without asking, so that re-running only
+     re-checked. That made it impossible to hand this PC a NEW key: it never
+     asked, sent the old one, got "bad booth key", and every re-run did the
+     same. Now it always asks -- Enter keeps what is saved. */
+  let prev = null;
   try {
-    const prev = JSON.parse(fs.readFileSync(CONF, "utf8"));
-    if (prev.boothKey && prev.boothKey.length > 8) return prev.boothKey;
+    const p = JSON.parse(fs.readFileSync(CONF, "utf8"));
+    if (p.boothKey && p.boothKey.length > 8) prev = p.boothKey;
   } catch (e) {}
 
-  const arg = process.argv.slice(2).find(a => a && !a.startsWith("--"));
-  if (arg) return arg.trim();
-
-  process.stdout.write("  Paste the booth key (right-click pastes in this window), then Enter:\n  > ");
-  return await new Promise(resolve => {
+  process.stdout.write(prev
+    ? "  A booth key is already saved on this PC.\n  Press Enter to keep it, or type the new key and press Enter:\n  > "
+    : "  Type the booth key (or right-click to paste), then press Enter:\n  > ");
+  const typed = await new Promise(resolve => {
     process.stdin.resume();
     process.stdin.setEncoding("utf8");
     process.stdin.once("data", d => { process.stdin.pause(); resolve(String(d).trim()); });
   });
+  if (!typed && prev) return prev;
+  return cloudkey.normalize(typed);
 }
 
 (async () => {

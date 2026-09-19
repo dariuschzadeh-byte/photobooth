@@ -103,6 +103,23 @@ const check = (name, fn) => {
     assert(Array.isArray(s.charts.heatmap) && s.charts.heatmap.length === 7);
   });
 
+  check("a booth key survives being read out over the phone", () => {
+    const k = require("../src/cloudkey");
+    const key = k.generate();
+    assert(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key), "unexpected shape " + key);
+    assert([...key.replace(/-/g, "")].every(ch => k.ALPHABET.includes(ch)), "confusable character in " + key);
+    // every way a person might type it lands on the same hash
+    const sloppy = key.toLowerCase().replace(/-/g, " ");
+    assert.strictEqual(k.normalize(sloppy), key);
+    assert.strictEqual(k.hash(sloppy), k.hash(key));
+    assert.strictEqual(k.hash(key.replace(/-/g, "")), k.hash(key));
+    // the same digest the Edge Function computes: sha256 hex of the key as sent
+    assert.strictEqual(k.hash(key), require("crypto").createHash("sha256").update(key).digest("hex"));
+    // an old-style long key is left exactly alone
+    const old = "xa0VC8QgqCZW6yska1b9CLNzT_Q12vC7";
+    assert.strictEqual(k.normalize(old), old);
+  });
+
   check("the paper count counts down from the newest reading", () => {
     const media = require("../src/media");
     const events = require("../src/events");
