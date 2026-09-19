@@ -3,10 +3,11 @@
 
    Usage:
      node scripts/generate-codes.js 250              add a new batch (default)
-     node scripts/generate-codes.js 250 --replace    wipe the store first
-                                                     (refused while the store
-                                                      holds codes, unless you
-                                                      also pass --force)
+     node scripts/generate-codes.js 250 --replace    retire every code in the
+                                                     store first (refused while
+                                                     the store holds codes,
+                                                     unless you also pass
+                                                     --force)
 
    Writes:
      - data/codes-batch<N>-<timestamp>.csv   (print these on the cards)
@@ -48,7 +49,12 @@ if (replace) {
     console.error("Replacing invalidates EVERY code already printed on a card. If you really mean it, add --force.");
     process.exit(1);
   }
-  db = { batches: [], codes: {} };
+  /* Retire, never wipe. This used to empty the store, which freed every
+     old code to be minted again -- and the old card carrying it, used or
+     not, would have started working the day it came back. Retired codes
+     stay in the store, so the uniqueness check below skips them for good. */
+  db.batches = db.batches || []; db.codes = db.codes || {};
+  require("../src/codes").retireAll(db);
 }
 
 // Cryptographically random, zero padded, and clear of BOTH special codes as
