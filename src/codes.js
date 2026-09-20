@@ -186,7 +186,14 @@ function generateBatch(count) {
   db.batches.push({ batch, generatedAt: new Date().toISOString(), count: fresh.size });
   save(db);
   logLine(`${new Date().toISOString()}  BATCH ${batch} GENERATED  ${fresh.size} codes`);
-  return { batch, added: fresh.size, total: Object.keys(db.codes).length };
+
+  /* The codes themselves are returned as well, so the dashboard can print
+     cards from a phone. They travel only in a command result -- one reply
+     to one request -- never in the half-hourly snapshot, which is public
+     to every approved account and kept for a year. Both callers that log
+     this (server.js) name the fields they log one by one, so nothing here
+     reaches the event stream by accident. */
+  return { batch, added: fresh.size, total: Object.keys(db.codes).length, codes: [...fresh] };
 }
 
 /** The two special codes plus today's staff allowance -- for /admin. */

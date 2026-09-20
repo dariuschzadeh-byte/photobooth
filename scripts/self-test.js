@@ -80,6 +80,17 @@ const check = (name, fn) => {
     assert(u.length >= 499);
   });
 
+  check("a new batch hands back its codes, so the dashboard can print cards", () => {
+    const r = codes.generateBatch(7);
+    assert(Array.isArray(r.codes) && r.codes.length === 7, "no codes in the result");
+    assert(r.codes.every(v => /^\d{6}$/.test(v)), "a code is not six digits");
+    assert(new Set(r.codes).size === 7, "the batch repeats a code");
+    assert(!r.codes.includes(c.masterCode) && !r.codes.includes(c.staffCode));
+    // Every one of them has to be in the store and spendable.
+    const unused = new Set(codes.unusedCodes());
+    assert(r.codes.every(v => unused.has(v)), "a returned code is not in the store");
+  });
+
   check("a voucher is valid exactly once", () => {
     const v = codes.unusedCodes()[0];
     assert.strictEqual(codes.validateAndRedeem(v).valid, true);
