@@ -156,6 +156,17 @@ const check = (name, fn) => {
     assert.strictEqual(stats.collect(codes.stats()).redemptions.total, 1);
   });
 
+  check("a released code is not logged in full to the cloud's event stream", () => {
+    // Read the source: the release handlers run inside the server, which
+    // this test does not start. Crude, but it catches the one regression
+    // that matters -- `{ code, ...}` creeping back into the logged fields.
+    const src = fs.readFileSync(path.join(ROOT, "server.js"), "utf8");
+    const calls = src.match(/events\.log\("code_released_by_staff",\s*\{[^}]*\}/g) || [];
+    assert(calls.length >= 2, "the release log calls were not found");
+    for (const c of calls) assert(!/\{\s*code\s*[,}]|[,\s]code\s*[,}]/.test(c.replace(/codeEnd/g, "")),
+      "a release event logs the full code: " + c);
+  });
+
   check("no plain voucher codes leave the booth in the snapshot", () => {
     const snap = JSON.stringify(stats.collect(codes.stats()));
     for (const v of codes.unusedCodes().slice(0, 30)) assert(!snap.includes(v));

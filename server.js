@@ -438,10 +438,15 @@ app.post("/admin/generate", requireLogin, (req, res) => {
 });
 
 // staff: manually give a code back (e.g. booth failed after the code was typed)
+/* Released codes are logged by their last two digits only. The event
+   stream goes to the cloud, where every approved account -- viewers too --
+   can read it for a year, and a released code is valid again: logged in
+   full, it was a free strip for anyone who looked. The full code is still
+   in data/redemptions.log on this PC, which is where an audit belongs. */
 app.post("/admin/release", requireLogin, (req, res) => {
   const code = (req.body && req.body.code || "").toString();
   const r = codes.release(code);
-  events.log("code_released_by_staff", { code, released: r.released, reason: r.reason || null });
+  events.log("code_released_by_staff", { codeEnd: String(code).slice(-2), released: r.released, reason: r.reason || null });
   const msg = r.released ? `code ${code} released -- it can be used again` : `code ${code} NOT released (${r.reason})`;
   res.redirect("/admin?msg=" + encodeURIComponent(msg));
 });
@@ -563,7 +568,7 @@ app.listen(config.PORT, config.HOST, () => {
     },
     release_code: ({ code }) => {
       const r = codes.release(String(code || ""));
-      events.log("code_released_by_staff", { code, released: r.released, reason: r.reason || null, via: "dashboard" });
+      events.log("code_released_by_staff", { codeEnd: String(code).slice(-2), released: r.released, reason: r.reason || null, via: "dashboard" });
       return r;
     },
     test_print: async () => {
