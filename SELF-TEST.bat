@@ -4,6 +4,7 @@ REM  fr-anz photobooth - SELF TEST
 REM  Checks the software side: voucher codes, the daily staff limit, the
 REM  statistics, and building a printable strip.
 REM  Runs against a temporary data folder, so it cannot spend a voucher.
+REM  STOP THE BOOTH FIRST (icon 2) - it refuses to run while the booth is on.
 REM  Says nothing about camera or printer - use CHECK-PRINTER for those.
 REM ====================================================================
 title fr-anz photobooth - self test

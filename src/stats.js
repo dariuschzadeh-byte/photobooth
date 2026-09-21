@@ -328,7 +328,7 @@ function buildAlerts({ pr, hf, capacity, codeStats, evs7 }) {
   }
   if (!pr.media || !pr.media.known) {
     add("info", "media_unknown", "Paper count unknown",
-      "Press \"New roll\" on the control page after the next roll change, or type in the count from DNP's Status App.");
+      "Enter the count from DNP's Status App on the dashboard's Printer tab (or on the booth's control page), or press \"New roll inserted\" after the next roll change.");
   }
 
   if (codeStats.total > 0) {

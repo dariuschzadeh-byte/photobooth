@@ -41,19 +41,69 @@ function stored() {
   return null;
 }
 
-/** Record a reading: a fresh roll, or a number read off the printer. */
-function set(remaining, source) {
+/** A sheet count, or an error saying why it is not one. */
+function sheetCount(remaining) {
   const v = Math.round(Number(remaining));
-  if (!Number.isFinite(v) || v < 0 || v > PER_ROLL * 2) {
+  if (remaining === null || remaining === undefined || remaining === "" ||
+      !Number.isFinite(v) || v < 0 || v > PER_ROLL * 2) {
     throw new Error(`not a sensible sheet count: ${remaining}`);
   }
-  const rec = { remaining: v, at: new Date().toISOString(), source };
+  return v;
+}
+
+/**
+ * Record a reading: a fresh roll, or a number read off the printer.
+ * `at` is when the number was true -- now, unless the reading was taken
+ * earlier and is only arriving now (see fromCommand).
+ */
+function set(remaining, source, at) {
+  const v = sheetCount(remaining);
+  const when = at === undefined ? new Date() : new Date(at);
+  if (isNaN(when)) throw new Error(`not a sensible time for a reading: ${at}`);
+  const rec = { remaining: v, at: when.toISOString(), source };
   fs.mkdirSync(config.paths.data, { recursive: true });
   const tmp = FILE + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(rec, null, 2));
   fs.renameSync(tmp, FILE);
   events.log("media_set", { remaining: v, source });
   return rec;
+}
+
+/**
+ * The dashboard's paper field, as received in a set_paper command.
+ *
+ * Mirrors the Printer paper section of /admin exactly: a fresh roll, or a
+ * number read off DNP's Status App -- through set(), so with the same
+ * limits. `newRoll` must be the boolean true: a stray "true" string or a 1
+ * falls through to the count path and is refused for want of a number,
+ * rather than silently resetting the count to a full roll.
+ */
+function fromCommand(params) {
+  const p = params || {};
+  const newRoll = p.newRoll === true;
+  const v = sheetCount(newRoll ? PER_ROLL : p.remaining);   // refuse nonsense before anything else
+
+  /* Dated when it was read, not when it arrived.
+
+     A command waits in the cloud for as long as the booth cannot reach it
+     -- and the booth goes on printing through a wifi outage by design.
+     Stamped on arrival, a count read at 10:00 and delivered at 13:00 would
+     ignore three hours of prints and overwrite anything entered on the
+     booth in between. Stamped with the moment the dashboard sent it,
+     estimate() subtracts every sheet printed since, and a newer reading
+     simply wins. A clock running ahead cannot date it into the future. */
+  const now = Date.now();
+  const sent = Date.parse(p.at);
+  const at = Number.isFinite(sent) ? Math.min(sent, now) : now;
+
+  const cur = stored();
+  if (cur && Date.parse(cur.at) > at) {
+    return { superseded: true, remaining: estimate(null).remaining, source: cur.source };
+  }
+
+  set(v, newRoll ? "new_roll" : "entered", new Date(at).toISOString());
+  const est = estimate(null);
+  return { remaining: est.remaining, entered: v, source: est.base.source, printedSince: est.printedSince };
 }
 
 /** Sheets that actually went to the printer after a moment in time. */
@@ -96,4 +146,4 @@ function estimate(hfp, evs) {
   };
 }
 
-module.exports = { estimate, set, sheetsPrintedSince, PER_ROLL, FILE };
+module.exports = { estimate, set, fromCommand, sheetsPrintedSince, PER_ROLL, FILE };

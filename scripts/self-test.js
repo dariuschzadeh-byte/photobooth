@@ -5,9 +5,10 @@
    discover at a guest's expense: voucher codes, the two special codes and
    their daily limit, the statistics, and building a strip end to end.
 
-   Touches no hardware, so it runs anywhere -- including on the booth PC
-   while it is live. It uses a temporary data folder and puts the real one
-   back afterwards, so a run cannot cost anybody a voucher.
+   Touches no hardware, so it runs anywhere. It uses a temporary data
+   folder and puts the real one back afterwards, so a run cannot cost
+   anybody a voucher -- which is only true while the booth is STOPPED, so
+   it refuses to start otherwise (see park() below).
 
    Exit code 0 = everything passed.
    ===================================================================== */
@@ -21,16 +22,69 @@ const ROOT = path.join(__dirname, "..");
 process.chdir(ROOT);
 
 /* Run against a scratch data folder. The live one is moved aside first --
-   the codes in it are money and a test must never be able to spend them. */
+   the codes in it are money and a test must never be able to spend them.
+
+   This used to say it was safe to run on the booth while it was live, and
+   it was the opposite. A running booth holds data\server.log open (the
+   ">>" in _server-loop.bat), and Windows will not rename a folder with an
+   open file in it. The rename failed, the error was swallowed, and the
+   test went on against the LIVE store: minting 500 real codes, spending
+   some, resetting every used card to valid -- and then restore() deleted
+   the folder it believed was its scratch copy. Icon 11 on the booth's
+   desktop was one click away from all of that.
+
+   Now it asks first and gives up on any doubt, before touching anything. */
+const net = require("net");
 const LIVE = path.join(ROOT, "data");
 const PARKED = LIVE + ".selftest-" + Date.now();
-let parked = false;
-try { if (fs.existsSync(LIVE)) { fs.renameSync(LIVE, PARKED); parked = true; } } catch (e) {}
-fs.mkdirSync(LIVE, { recursive: true });
+let parked = false;   // the live folder has been moved aside
+let scratch = false;  // LIVE now holds nothing but this run's scratch data
+
+function refuse(why) {
+  console.log("\n  " + why);
+  console.log("  Nothing was changed.\n");
+  process.exit(2);
+}
+
+// Something answering on the booth's port is the booth.
+function boothIsRunning(port) {
+  return new Promise(resolve => {
+    const sock = net.connect({ port, host: "127.0.0.1" });
+    const done = v => { sock.destroy(); resolve(v); };
+    sock.once("connect", () => done(true));
+    sock.once("error", () => done(false));
+    sock.setTimeout(800, () => done(false));
+  });
+}
+
+async function park() {
+  const { PORT } = require("../config");
+  if (await boothIsRunning(PORT)) {
+    refuse("The booth is running. Stop it first (icon 2 - STOP PHOTOBOOTH), then run the self-test again.");
+  }
+  if (fs.existsSync(LIVE)) {
+    try { fs.renameSync(LIVE, PARKED); parked = true; }
+    catch (e) {
+      refuse(`Could not move the data folder aside (${e.code || e.message}). ` +
+             "Is the booth still running? Stop it (icon 2 - STOP PHOTOBOOTH) and try again.");
+    }
+  }
+  fs.mkdirSync(LIVE, { recursive: true });
+  scratch = true;
+}
 
 function restore() {
+  if (!scratch) return;   // never delete a folder this run did not create
   try { fs.rmSync(LIVE, { recursive: true, force: true }); } catch (e) {}
-  if (parked) { try { fs.renameSync(PARKED, LIVE); } catch (e) {} }
+  if (parked) {
+    try { fs.renameSync(PARKED, LIVE); }
+    catch (e) {
+      // Say so loudly: a booth started now would start with no codes.
+      console.log("\n  !!! Could not put the real data back (" + (e.code || e.message) + ").");
+      console.log("  !!! It is safe in:  " + PARKED);
+      console.log("  !!! Rename that folder back to 'data' BEFORE starting the booth.\n");
+    }
+  }
 }
 
 let passed = 0;
@@ -40,6 +94,7 @@ const check = (name, fn) => {
 };
 
 (async () => {
+  await park();           // before any module below can open the data folder
   const codes = require("../src/codes");
   const special = require("../src/specialcodes");
   const stats = require("../src/stats");
@@ -135,8 +190,16 @@ const check = (name, fn) => {
     const media = require("../src/media");
     const events = require("../src/events");
 
+    /* Readings and prints are ordered by their millisecond timestamps, so a
+       test that logs both inside one millisecond cannot say which came
+       first -- and failed at random because of it, about one run in three.
+       A real roll change and the next print are seconds apart. Waiting for
+       the clock to move gives the test the same unambiguous order. */
+    const tick = () => { const t0 = Date.now(); while (Date.now() === t0) { /* spin */ } };
+
     media.set(media.PER_ROLL, "new_roll");
     assert.strictEqual(media.estimate(null).remaining, media.PER_ROLL);
+    tick();
 
     events.log("print_ok", { kind: "guest", printed: true });
     events.log("print_ok", { kind: "guest", printed: true });
@@ -154,6 +217,7 @@ const check = (name, fn) => {
     // a status written while the printer was not healthy is no reading at all
     assert.strictEqual(media.estimate({ ...fresh, online: false }).base.source, "new_roll");
 
+    tick();
     media.set(120, "entered");
     const st = stats.collect(codes.stats());
     assert.strictEqual(st.printer.sheets, 120);
@@ -166,6 +230,59 @@ const check = (name, fn) => {
     let refused = false;
     try { media.set("lots", "entered"); } catch (err) { refused = true; }
     assert(refused, "a nonsense count was accepted");
+  });
+
+  check("the dashboard's paper field does what the control page does", () => {
+    const media = require("../src/media");
+    const refuses = params => { try { media.fromCommand(params); return false; } catch (e) { return true; } };
+
+    const roll = media.fromCommand({ newRoll: true });
+    assert.strictEqual(roll.remaining, media.PER_ROLL); assert.strictEqual(roll.source, "new_roll");
+    const typed = media.fromCommand({ remaining: 412 });
+    assert.strictEqual(typed.remaining, 412); assert.strictEqual(typed.source, "entered");
+    assert.strictEqual(media.estimate(null).remaining, 412, "the entered count is not the one the booth counts from");
+
+    // A typo, a word, nothing at all, and a count past two full rolls.
+    assert(refuses({ remaining: 7000 }), "7000 sheets was accepted");
+    assert(refuses({ remaining: "lots" }), "a word was accepted");
+    assert(refuses({}), "an empty command was accepted");
+    assert(refuses({ remaining: -3 }), "a negative count was accepted");
+    // Only a real boolean means a new roll. "true" as text must not quietly
+    // reset the count to a full roll.
+    assert(refuses({ newRoll: "true" }), "the string \"true\" was taken as a new roll");
+    assert.strictEqual(media.estimate(null).remaining, 412, "a refused command changed the count");
+  });
+
+  check("a paper count that arrives late is dated when it was read", () => {
+    const media = require("../src/media");
+    const events = require("../src/events");
+    const tick = () => { const t0 = Date.now(); while (Date.now() === t0) { /* spin */ } };
+
+    // 10:00 -- Trueman reads 500 off the Status App; the wifi is down, so
+    // the command waits in the cloud while the booth keeps printing.
+    tick();
+    const readAt = new Date().toISOString();
+    tick();
+    for (let i = 0; i < 3; i++) events.log("print_ok", { kind: "guest", printed: true });
+    tick();
+    // 13:00 -- the wifi is back and the command finally arrives.
+    const late = media.fromCommand({ remaining: 500, at: readAt });
+    assert.strictEqual(late.remaining, 497, "the prints made while it waited were not subtracted");
+
+    // Someone entered a newer count on the booth itself in the meantime:
+    // the older one from the phone must not overwrite it.
+    tick();
+    media.set(300, "entered");
+    tick();
+    const stale = media.fromCommand({ remaining: 650, at: readAt });
+    assert.strictEqual(stale.superseded, true, "an older count was applied over a newer one");
+    assert.strictEqual(media.estimate(null).remaining, 300, "the newer count was overwritten");
+
+    // A phone clock running an hour fast cannot date a reading into the future.
+    tick();
+    media.fromCommand({ remaining: 200, at: new Date(Date.now() + 3600e3).toISOString() });
+    assert(Date.parse(media.estimate(null).base.at) <= Date.now(), "a reading was dated in the future");
+    assert.strictEqual(media.estimate(null).remaining, 200);
   });
 
   check("a reset makes every code valid again for a reprint", () => {

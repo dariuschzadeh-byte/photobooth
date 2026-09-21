@@ -571,6 +571,11 @@ app.listen(config.PORT, config.HOST, () => {
       events.log("test_print", { ok: true, printed: !!r.printed, via: "dashboard" });
       return r;
     },
+    /* The Printer paper section of /admin, from a phone. Same two actions,
+       the same function behind them, and so the same limits: a count
+       outside 0 to two rolls is refused by media.set and comes back to the
+       dashboard as a failed command with the reason attached. */
+    set_paper: params => media.fromCommand(params),
     restart_server: () => {
       // Exiting is the restart: _server-loop.bat brings the server straight
       // back up. Delayed so this command's receipt reaches the dashboard
